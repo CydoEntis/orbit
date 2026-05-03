@@ -35,7 +35,7 @@ mac:
 linux:
   icon: build/icon.png
   category: Development
-  maintainer: CydoEntis <cody@cubixai.dev>
+  maintainer: CydoEntis <cydoentis@gmail.com>
   target:
     - target: AppImage
       arch: [x64]
