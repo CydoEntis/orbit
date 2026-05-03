@@ -117,7 +117,7 @@ export function NewSessionForm({ variant = 'icon' }: { variant?: 'icon' | 'sideb
       <DialogTrigger asChild>
         {variant === 'sidebar' ? (
           <button className="flex-1 flex items-center justify-center gap-2 py-2 text-xs text-zinc-500 hover:bg-brand-panel hover:text-brand-light transition-colors rounded">
-            <Plus size={13} /> New Session
+            <Plus size={15} /> New Session
           </button>
         ) : (
           <button

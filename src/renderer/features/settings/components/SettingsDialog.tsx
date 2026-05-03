@@ -16,6 +16,7 @@ import {
 } from '../../../components/ui/dialog'
 import { Input } from '../../../components/ui/input'
 import { Label } from '../../../components/ui/label'
+import { Checkbox } from '../../../components/ui/checkbox'
 import { useStore } from '../../../store/root.store'
 
 const HOTKEY_FIELDS: { key: keyof AppSettings['hotkeys']; label: string }[] = [
@@ -37,6 +38,7 @@ export function SettingsDialog(): JSX.Element {
 
   const defaultShell = watch('defaultShell')
   const shellStartDir = watch('shellStartDir')
+  const confirmClose = watch('confirmCloseSession')
 
   const pickShell = async (): Promise<void> => {
     const picked = await window.ipc.invoke(IPC.DIALOG_PICK_FILE) as string | null
@@ -144,14 +146,14 @@ export function SettingsDialog(): JSX.Element {
 
             <section className="flex flex-col gap-3">
               <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Sessions</p>
-              <label className="flex items-center justify-between cursor-pointer select-none">
-                <span className="text-sm text-zinc-300">Confirm before closing</span>
-                <input
-                  type="checkbox"
-                  {...register('confirmCloseSession')}
-                  className="w-4 h-4 accent-brand-green cursor-pointer"
+              <div className="flex items-center justify-between">
+                <Label htmlFor="confirm-close" className="text-sm text-zinc-300 font-normal cursor-pointer">Confirm before closing</Label>
+                <Checkbox
+                  id="confirm-close"
+                  checked={confirmClose ?? true}
+                  onCheckedChange={(v) => setValue('confirmCloseSession', v === true)}
                 />
-              </label>
+              </div>
             </section>
 
           </div>

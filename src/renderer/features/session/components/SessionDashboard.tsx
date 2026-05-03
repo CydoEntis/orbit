@@ -564,7 +564,7 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs text-zinc-600 hover:bg-brand-panel hover:text-zinc-400 transition-colors rounded"
                 title="New group"
               >
-                <Layers size={12} /> New Group
+                <Layers size={15} /> New Group
               </button>
             </div>
           </div>

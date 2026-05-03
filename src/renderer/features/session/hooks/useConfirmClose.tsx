@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from '../../../store/root.store'
+import { Checkbox } from '../../../components/ui/checkbox'
+import { Label } from '../../../components/ui/label'
 
 export function useConfirmClose(): {
   requestClose: (onConfirm: () => void) => void
@@ -39,15 +41,14 @@ export function useConfirmClose(): {
               <p className="text-sm font-semibold text-zinc-200">Close session?</p>
               <p className="text-xs text-zinc-500 mt-1">The session will be terminated.</p>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="dont-ask"
                 checked={dontAsk}
-                onChange={(e) => setDontAsk(e.target.checked)}
-                className="w-3.5 h-3.5 accent-brand-green"
+                onCheckedChange={(v) => setDontAsk(v === true)}
               />
-              <span className="text-xs text-zinc-500">Don't ask again</span>
-            </label>
+              <Label htmlFor="dont-ask" className="text-xs text-zinc-500 cursor-pointer">Don't ask again</Label>
+            </div>
             <div className="flex gap-2 justify-end">
               <button
                 onClick={handleCancel}
