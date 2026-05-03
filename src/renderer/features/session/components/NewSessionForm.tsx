@@ -51,9 +51,8 @@ export function NewSessionForm({ variant = 'icon' }: { variant?: 'icon' | 'sideb
     return () => document.removeEventListener('acc:new-session', handler)
   }, [])
 
-  const getDefaultDir = (preset: PresetId): string => {
-    if (preset === 'shell') return settings.shellStartDir || ''
-    return settings.projectRoot || ''
+  const getDefaultDir = (_preset: PresetId): string => {
+    return settings.shellStartDir || ''
   }
 
   const handlePresetChange = (preset: PresetId): void => {
