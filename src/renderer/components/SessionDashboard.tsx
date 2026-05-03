@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { X, FolderOpen, FolderClosed, Plus, Terminal, RefreshCw } from 'lucide-react'
 import { useStore } from '../store/root.store'
 import { findTabForSession } from '../features/terminal/pane-tree'
 import { FileTree } from './FileTree'
-import { pickFolder } from '../features/window/window.service'
-import { createSession, killSession } from '../features/session/session.service'
+import { useProjects } from '../features/session/useProjects'
+import { createSession } from '../features/session/session.service'
 import { cn } from '../lib/utils'
 
 interface ProjectSectionProps {
@@ -63,83 +63,10 @@ export function SessionDashboard({ onFileClick, activeTab }: Props): JSX.Element
   const updateSettings = useStore((s) => s.updateSettings)
   const upsertSession = useStore((s) => s.upsertSession)
   const addTab = useStore((s) => s.addTab)
-  const closePane = useStore((s) => s.closePane)
+
+  const { openProjects, refreshTicks, bumpRefresh, addProject, removeProject, closeSession } = useProjects()
 
   const allSessions = Object.values(sessions).sort((a, b) => b.createdAt - a.createdAt)
-
-  // Track which project is selected in the projects panel
-  useEffect(() => {
-    const handler = (): void => { addProject() }
-    document.addEventListener('acc:open-project', handler)
-    return () => document.removeEventListener('acc:open-project', handler)
-  }, [])
-
-  const [refreshTicks, setRefreshTicks] = useState<Record<string, number>>({})
-  const bumpRefresh = (root: string): void => setRefreshTicks((t) => ({ ...t, [root]: (t[root] ?? 0) + 1 }))
-
-  const [selectedRoot, setSelectedRoot] = useState<string>(() => {
-    const first = settings.openProjects[0]
-    return (first ?? settings.projectRoot ?? '').replace(/\\/g, '/')
-  })
-
-  const openProjects = settings.openProjects.map((p) => p.replace(/\\/g, '/'))
-
-  const selectProject = (root: string): void => {
-    const normalized = root.replace(/\\/g, '/')
-    setSelectedRoot(normalized)
-    updateSettings({ projectRoot: normalized })
-  }
-
-  const addProject = async (): Promise<void> => {
-    const folder = await pickFolder()
-    if (!folder) return
-    const normalized = folder.replace(/\\/g, '/')
-    const existing = openProjects
-    if (!existing.includes(normalized)) {
-      const recent = [normalized, ...settings.recentProjects.filter((p) => p.replace(/\\/g, '/') !== normalized)].slice(0, 10)
-      await updateSettings({
-        openProjects: [...settings.openProjects, folder],
-        projectRoot: folder,
-        recentProjects: recent,
-      })
-      try {
-        const meta = await createSession({
-          name: folder.split(/[\\/]/).pop() ?? 'project',
-          agentCommand: 'claude',
-          cwd: folder,
-          cols: 80,
-          rows: 24,
-        })
-        upsertSession(meta)
-        addTab(meta.sessionId)
-      } catch {}
-    }
-    setSelectedRoot(normalized)
-  }
-
-  const removeProject = async (root: string): Promise<void> => {
-    const normalized = root.replace(/\\/g, '/')
-    // Kill all sessions whose cwd lives under this project
-    const projectSessions = Object.values(sessions).filter(
-      (m) => m.cwd?.replace(/\\/g, '/').startsWith(normalized)
-    )
-    for (const m of projectSessions) {
-      const tabId = findTabForSession(paneTree, m.sessionId)
-      try { await killSession(m.sessionId) } catch {}
-      if (tabId) closePane(tabId, m.sessionId)
-    }
-    await updateSettings({ openProjects: settings.openProjects.filter((p) => p.replace(/\\/g, '/') !== normalized) })
-    if (selectedRoot === normalized) {
-      const remaining = openProjects.filter((p) => p !== normalized)
-      setSelectedRoot(remaining[0] ?? '')
-    }
-  }
-
-  const closeSession = async (sessionId: string): Promise<void> => {
-    const tabId = findTabForSession(paneTree, sessionId)
-    try { await killSession(sessionId) } catch {}
-    if (tabId) closePane(tabId, sessionId)
-  }
 
   return (
     <div className="flex flex-col w-56 h-full bg-brand-bg border-r border-brand-panel flex-shrink-0">
