@@ -36,7 +36,7 @@ export function EmptyState(): JSX.Element {
       <img src={logoUrl} alt="Dominion" className="w-20 h-20 object-contain opacity-90" />
 
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-brand-light tracking-wide">Grimoire</h1>
+        <h1 className="text-2xl font-bold text-brand-green tracking-wide">Dominion</h1>
       </div>
 
       <div className="w-56 h-px bg-brand-panel" />
