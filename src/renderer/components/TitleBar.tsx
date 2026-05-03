@@ -1,12 +1,10 @@
-import { useState, useEffect } from 'react'
 import { Minus, Square, X, Minimize2 } from 'lucide-react'
 import { SessionTabBar } from '../features/session/SessionTabBar'
 import { sendWindowControl } from '../features/window/window.service'
+import { useWindowMaximized } from '../features/window/useWindowMaximized'
 import { PresetsMenu } from './PresetsMenu'
 import { cn } from '../lib/utils'
 import { APP_NAME } from '@shared/constants'
-import { IPC } from '@shared/ipc-channels'
-import { ipc } from '../lib/ipc'
 import logoUrl from '../assets/logo.png'
 
 interface OpenFile {
@@ -28,13 +26,7 @@ function shortName(p: string): string {
 }
 
 export function TitleBar({ activity, openFiles, activeFilePath, onActivateFile, onCloseFile }: Props): JSX.Element {
-  const [isMaximized, setIsMaximized] = useState(false)
-
-  useEffect(() => {
-    return ipc.on(IPC.WINDOW_MAXIMIZED_CHANGE, (payload) => {
-      setIsMaximized((payload as { maximized: boolean }).maximized)
-    })
-  }, [])
+  const isMaximized = useWindowMaximized()
 
   return (
     <div
@@ -42,10 +34,7 @@ export function TitleBar({ activity, openFiles, activeFilePath, onActivateFile, 
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       {/* Logo + name */}
-      <div
-        className="flex items-center gap-2 px-3 flex-shrink-0"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      >
+      <div className="flex items-center gap-2 px-3 flex-shrink-0">
         <img src={logoUrl} alt="logo" className="w-9 h-9 object-contain flex-shrink-0" />
         <span className="text-xs font-semibold text-brand-light tracking-wide whitespace-nowrap">
           {APP_NAME}
@@ -53,8 +42,8 @@ export function TitleBar({ activity, openFiles, activeFilePath, onActivateFile, 
         <div className="w-px h-4 bg-brand-panel mx-1" />
       </div>
 
-      {/* Context-sensitive tab bar */}
-      <div className="flex items-center h-full flex-1 min-w-0 overflow-x-auto" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      {/* Context-sensitive tab bar — container inherits drag; individual tabs opt out */}
+      <div className="flex items-center h-full flex-1 min-w-0 overflow-x-auto">
         {activity === 'sessions' ? (
           <SessionTabBar />
         ) : (
@@ -68,6 +57,7 @@ export function TitleBar({ activity, openFiles, activeFilePath, onActivateFile, 
                   key={f.path}
                   onClick={() => onActivateFile(f.path)}
                   title={f.path}
+                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
                   className={cn(
                     'relative flex items-center gap-2 px-4 h-full border-r border-brand-panel cursor-pointer flex-shrink-0 min-w-[120px] max-w-[200px] group transition-colors',
                     isActive ? 'bg-brand-panel/60 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300 hover:bg-brand-panel/30'
