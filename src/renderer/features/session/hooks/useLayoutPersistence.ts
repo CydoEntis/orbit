@@ -41,7 +41,8 @@ export function useLayoutPersistence(): void {
           agentCommand: m.agentCommand,
           cwd: m.cwd,
           color: m.color,
-          conversationId: m.conversationId
+          conversationId: m.conversationId,
+          groupId: m.groupId
         })),
         tabs: [
           ...state.tabOrder

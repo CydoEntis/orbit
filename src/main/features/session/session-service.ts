@@ -48,7 +48,8 @@ export function createSession(
     createdAt: Date.now(),
     pid: null,
     color: payload.color,
-    agentStatus: 'idle'
+    agentStatus: 'idle',
+    groupId: payload.groupId
   }
 
   const pty = new PtyProcess({
@@ -114,7 +115,7 @@ export function resizeSession(sessionId: string, cols: number, rows: number): vo
 
 export { listSessions }
 
-export function patchSession(sessionId: string, patch: { name?: string; color?: string }): SessionMeta | undefined {
+export function patchSession(sessionId: string, patch: { name?: string; color?: string; groupId?: string }): SessionMeta | undefined {
   const updated = updateSessionMeta(sessionId, patch)
   if (updated) broadcastMetaUpdate(updated)
   return updated

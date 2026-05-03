@@ -8,7 +8,8 @@ export const CreateSessionPayloadSchema = z.object({
   cwd: z.string().optional(),
   cols: z.number().int().positive().default(80),
   rows: z.number().int().positive().default(24),
-  color: z.string().optional()
+  color: z.string().optional(),
+  groupId: z.string().optional()
 })
 export type CreateSessionPayload = z.infer<typeof CreateSessionPayloadSchema>
 
@@ -31,7 +32,8 @@ export const SessionMetaSchema = z.object({
   pid: z.number().nullable(),
   color: z.string().optional(),
   agentStatus: AgentStatusSchema.default('idle'),
-  conversationId: z.string().optional()
+  conversationId: z.string().optional(),
+  groupId: z.string().optional()
 })
 export type SessionMeta = z.infer<typeof SessionMetaSchema>
 
@@ -137,6 +139,7 @@ export const AppSettingsSchema = z.object({
   recentProjects: z.array(z.string()).default([]),
   defaultShell: z.string().default(''),
   shellStartDir: z.string().default(''),
+  sessionGroups: z.array(z.object({ id: z.string(), name: z.string() })).default([]),
   fontSize: z.number().int().min(8).max(32).default(14),
   fontFamily: z.string().default("'Cascadia Code', 'JetBrains Mono', monospace"),
   theme: z.enum(['system', 'light', 'dark']).default('dark'),
@@ -158,6 +161,7 @@ export interface PersistedSession {
   cwd: string
   conversationId?: string
   color?: string
+  groupId?: string
 }
 
 export interface PersistedTab {

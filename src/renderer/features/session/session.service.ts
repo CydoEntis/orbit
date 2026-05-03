@@ -26,6 +26,6 @@ export function resizeSession(payload: SessionResizePayload): void {
   ipc.send(IPC.SESSION_RESIZE, payload)
 }
 
-export async function patchSession(payload: { sessionId: string; name?: string; color?: string }): Promise<SessionMeta> {
+export async function patchSession(payload: { sessionId: string; name?: string; color?: string; groupId?: string | null }): Promise<SessionMeta> {
   return ipc.invoke(IPC.SESSION_PATCH, payload) as Promise<SessionMeta>
 }
