@@ -12,6 +12,8 @@ import { createSession, patchSession } from '../session.service'
 import { cn } from '../../../lib/utils'
 import type { SessionMeta } from '@shared/ipc-types'
 
+const GROUP_COLORS = ['#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#06b6d4']
+
 interface ProjectCtxMenu { x: number; y: number; path: string }
 
 function ProjectContextMenu({ x, y, path, onDismiss }: ProjectCtxMenu & { onDismiss: () => void }): JSX.Element {
@@ -77,7 +79,7 @@ interface SessionCtxMenuProps {
   x: number
   y: number
   meta: SessionMeta
-  groups: { id: string; name: string }[]
+  groups: { id: string; name: string; color?: string }[]
   onAssign: (groupId: string | null) => void
   onNewGroup: () => void
   onDismiss: () => void
@@ -128,6 +130,7 @@ function SessionGroupMenu({ x, y, meta, groups, onAssign, onNewGroup, onDismiss 
           className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors text-left"
         >
           <Check size={11} className={cn('flex-shrink-0', meta.groupId === g.id ? 'text-brand-green' : 'opacity-0')} />
+          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: g.color ?? '#71717a' }} />
           {g.name}
         </button>
       ))}
@@ -139,6 +142,81 @@ function SessionGroupMenu({ x, y, meta, groups, onAssign, onNewGroup, onDismiss 
         <Plus size={11} className="flex-shrink-0" />
         New group…
       </button>
+    </div>,
+    document.body
+  )
+}
+
+// ─── Create group modal ───────────────────────────────────────────────────────
+
+interface CreateGroupModalProps {
+  pendingSessionId?: string
+  onConfirm: (name: string, color: string, pendingSessionId?: string) => void
+  onDismiss: () => void
+}
+
+function CreateGroupModal({ pendingSessionId, onConfirm, onDismiss }: CreateGroupModalProps): JSX.Element {
+  const [name, setName] = useState('')
+  const [color, setColor] = useState(GROUP_COLORS[0])
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }, [])
+
+  const confirm = (): void => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    onConfirm(trimmed, color, pendingSessionId)
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onDismiss() }}
+    >
+      <div className="bg-brand-surface border border-brand-panel/60 rounded-lg shadow-2xl p-4 w-72 flex flex-col gap-3">
+        <h3 className="text-xs font-semibold text-zinc-300">New Group</h3>
+        <input
+          ref={inputRef}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') confirm()
+            if (e.key === 'Escape') onDismiss()
+          }}
+          placeholder="Group name…"
+          className="w-full bg-brand-panel border border-brand-panel/60 rounded px-2.5 py-1.5 text-xs text-zinc-100 outline-none focus:border-brand-green/60 placeholder:text-zinc-600"
+        />
+        <div className="flex flex-wrap gap-2">
+          {GROUP_COLORS.map((c) => (
+            <button
+              key={c}
+              style={{ backgroundColor: c }}
+              className={cn(
+                'w-5 h-5 rounded-full transition-transform',
+                color === c ? 'ring-2 ring-offset-2 ring-offset-brand-surface ring-zinc-300 scale-110' : 'hover:scale-110'
+              )}
+              onClick={() => setColor(c)}
+            />
+          ))}
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onDismiss}
+            className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors rounded hover:bg-brand-panel"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirm}
+            disabled={!name.trim()}
+            className="px-3 py-1.5 text-xs bg-brand-green/20 text-brand-green hover:bg-brand-green/30 transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Create
+          </button>
+        </div>
+      </div>
     </div>,
     document.body
   )
@@ -198,14 +276,14 @@ function timeAgo(ts: number): string {
 interface SessionRowProps {
   meta: SessionMeta
   isFocused: boolean
-  tabId: string | undefined
-  groups: { id: string; name: string }[]
+  tabId: string | null | undefined
+  groups: { id: string; name: string; color?: string }[]
   onActivate: () => void
   onClose: () => void
   onContextMenu: (e: React.MouseEvent) => void
 }
 
-function SessionRow({ meta, isFocused, tabId, groups, onActivate, onClose, onContextMenu }: SessionRowProps): JSX.Element {
+function SessionRow({ meta, isFocused, tabId, onActivate, onClose, onContextMenu }: SessionRowProps): JSX.Element {
   const isRunning = meta.status === 'running'
   const agentStatus = meta.agentStatus ?? 'idle'
   const sessionColor = meta.color ?? '#22c55e'
@@ -220,7 +298,7 @@ function SessionRow({ meta, isFocused, tabId, groups, onActivate, onClose, onCon
       onClick={onActivate}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e) }}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 min-w-0">
         {isRunning && agentStatus === 'running' ? (
           <Loader2 size={11} className="flex-shrink-0 animate-spin" style={{ color: sessionColor }} />
         ) : isRunning && agentStatus === 'waiting-input' ? (
@@ -228,7 +306,7 @@ function SessionRow({ meta, isFocused, tabId, groups, onActivate, onClose, onCon
         ) : (
           <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', isRunning ? 'bg-green-400' : 'bg-zinc-600')} />
         )}
-        <span className={cn('text-xs font-medium truncate flex-1', isFocused ? 'text-zinc-100' : 'text-zinc-500')}>
+        <span className={cn('text-xs font-medium truncate flex-1 min-w-0', isFocused ? 'text-zinc-100' : 'text-zinc-500')}>
           {meta.name}
         </span>
         <span className={cn('text-[10px] flex-shrink-0', isFocused ? 'text-zinc-400' : 'text-zinc-700')}>
@@ -252,13 +330,12 @@ function SessionRow({ meta, isFocused, tabId, groups, onActivate, onClose, onCon
 // ─── Group section ────────────────────────────────────────────────────────────
 
 interface GroupSectionProps {
-  group: { id: string; name: string }
+  group: { id: string; name: string; color?: string }
   sessions: SessionMeta[]
   collapsed: boolean
   onToggle: () => void
   onRename: (name: string) => void
   onDelete: () => void
-  sessionProps: Omit<SessionRowProps, 'meta' | 'isFocused' | 'tabId' | 'onActivate' | 'onClose' | 'onContextMenu'>
   focusedSessionId: string | null
   paneTree: Record<string, unknown>
   onActivate: (tabId: string, sessionId: string) => void
@@ -289,7 +366,10 @@ function GroupSection({ group, sessions, collapsed, onToggle, onRename, onDelete
         <button onClick={onToggle} className="text-zinc-600 hover:text-zinc-300 transition-colors flex-shrink-0">
           {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
         </button>
-        <Layers size={11} className="text-zinc-600 flex-shrink-0" />
+        <span
+          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+          style={{ backgroundColor: group.color ?? '#71717a' }}
+        />
         {renaming ? (
           <input
             ref={inputRef}
@@ -304,7 +384,7 @@ function GroupSection({ group, sessions, collapsed, onToggle, onRename, onDelete
           />
         ) : (
           <span
-            className="text-xs font-semibold text-zinc-400 flex-1 truncate"
+            className="text-xs font-semibold text-zinc-400 flex-1 truncate min-w-0"
             onDoubleClick={startRename}
           >
             {group.name}
@@ -372,18 +452,12 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [sessionCtxMenu, setSessionCtxMenu] = useState<{ x: number; y: number; meta: SessionMeta } | null>(null)
-  const [creatingGroup, setCreatingGroup] = useState(false)
-  const [newGroupName, setNewGroupName] = useState('')
-  const newGroupInputRef = useRef<HTMLInputElement>(null)
+  const [createGroupModal, setCreateGroupModal] = useState<{ pendingSessionId?: string } | null>(null)
 
   useEffect(() => {
     if (!externalRefreshTick) return
     openProjects.forEach((path) => bumpRefresh(path))
   }, [externalRefreshTick])
-
-  useEffect(() => {
-    if (creatingGroup) setTimeout(() => newGroupInputRef.current?.focus(), 0)
-  }, [creatingGroup])
 
   const allSessions = Object.values(sessions).sort((a, b) => b.createdAt - a.createdAt)
   const groups = settings.sessionGroups ?? []
@@ -393,9 +467,9 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
     upsertSession(updated)
   }, [upsertSession])
 
-  const handleCreateGroup = useCallback(async (name: string, assignSessionId?: string) => {
+  const handleCreateGroup = useCallback(async (name: string, color: string, assignSessionId?: string) => {
     const id = crypto.randomUUID()
-    const newGroups = [...groups, { id, name }]
+    const newGroups = [...groups, { id, name, color }]
     await updateSettings({ sessionGroups: newGroups })
     if (assignSessionId) {
       const updated = await patchSession({ sessionId: assignSessionId, groupId: id })
@@ -408,27 +482,10 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
   }, [groups, updateSettings])
 
   const handleDeleteGroup = useCallback(async (groupId: string) => {
-    // Ungroup all sessions in this group
     const inGroup = allSessions.filter((m) => m.groupId === groupId)
     await Promise.all(inGroup.map((m) => patchSession({ sessionId: m.sessionId, groupId: null }).then(upsertSession)))
     await updateSettings({ sessionGroups: groups.filter((g) => g.id !== groupId) })
   }, [groups, allSessions, updateSettings, upsertSession])
-
-  const handleCommitNewGroup = useCallback(async () => {
-    const name = newGroupName.trim()
-    setCreatingGroup(false)
-    setNewGroupName('')
-    if (!name) return
-    await handleCreateGroup(name)
-  }, [newGroupName, handleCreateGroup])
-
-  const handleNewGroupForSession = useCallback(async (meta: SessionMeta) => {
-    const id = crypto.randomUUID()
-    const newGroups = [...groups, { id, name: 'New Group' }]
-    await updateSettings({ sessionGroups: newGroups })
-    const updated = await patchSession({ sessionId: meta.sessionId, groupId: id })
-    upsertSession(updated)
-  }, [groups, updateSettings, upsertSession])
 
   const ungroupedSessions = allSessions.filter((m) => !m.groupId || !groups.find((g) => g.id === m.groupId))
 
@@ -456,7 +513,6 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
                   })}
                   onRename={(name) => handleRenameGroup(group.id, name)}
                   onDelete={() => handleDeleteGroup(group.id)}
-                  sessionProps={{} as any}
                   focusedSessionId={focusedSessionId}
                   paneTree={paneTree}
                   onActivate={(tabId, sessionId) => { setActiveSession(tabId); setFocusedSession(sessionId) }}
@@ -473,9 +529,6 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
                   <div className="px-3 pt-2 pb-1">
                     <span className="text-[10px] text-zinc-700 uppercase tracking-wider">Ungrouped</span>
                   </div>
-                )}
-                {ungroupedSessions.length === 0 && allSessions.length === 0 && (
-                  <p className="text-xs text-zinc-600 text-center mt-6">No sessions</p>
                 )}
                 {ungroupedSessions.map((meta) => {
                   const tabId = findTabForSession(paneTree, meta.sessionId)
@@ -501,28 +554,11 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
           </div>
 
           {/* Footer */}
-          <div className="flex-shrink-0 border-t border-brand-panel/60 p-2 flex flex-col gap-1">
-            {creatingGroup && (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-brand-panel/40 rounded">
-                <Layers size={11} className="text-zinc-500 flex-shrink-0" />
-                <input
-                  ref={newGroupInputRef}
-                  value={newGroupName}
-                  onChange={(e) => setNewGroupName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleCommitNewGroup()
-                    if (e.key === 'Escape') { setCreatingGroup(false); setNewGroupName('') }
-                  }}
-                  onBlur={handleCommitNewGroup}
-                  placeholder="Group name…"
-                  className="flex-1 bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-600"
-                />
-              </div>
-            )}
+          <div className="flex-shrink-0 border-t border-brand-panel/60 p-2">
             <div className="flex gap-1">
               <NewSessionForm variant="sidebar" />
               <button
-                onClick={() => setCreatingGroup(true)}
+                onClick={() => setCreateGroupModal({})}
                 className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs text-zinc-600 hover:bg-brand-panel hover:text-zinc-400 transition-colors rounded"
                 title="New group"
               >
@@ -582,9 +618,21 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
           y={sessionCtxMenu.y}
           meta={sessionCtxMenu.meta}
           groups={groups}
-          onAssign={(groupId) => handleAssignGroup(sessionCtxMenu.meta.sessionId, groupId)}
-          onNewGroup={() => handleNewGroupForSession(sessionCtxMenu.meta)}
+          onAssign={(groupId) => { handleAssignGroup(sessionCtxMenu.meta.sessionId, groupId); setSessionCtxMenu(null) }}
+          onNewGroup={() => { setSessionCtxMenu(null); setCreateGroupModal({ pendingSessionId: sessionCtxMenu.meta.sessionId }) }}
           onDismiss={() => setSessionCtxMenu(null)}
+        />
+      )}
+
+      {/* Create group modal */}
+      {createGroupModal && (
+        <CreateGroupModal
+          pendingSessionId={createGroupModal.pendingSessionId}
+          onConfirm={(name, color, pendingSessionId) => {
+            setCreateGroupModal(null)
+            handleCreateGroup(name, color, pendingSessionId)
+          }}
+          onDismiss={() => setCreateGroupModal(null)}
         />
       )}
     </div>

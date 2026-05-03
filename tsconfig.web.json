@@ -12,9 +12,9 @@
     "resolveJsonModule": true,
     "outDir": "out/renderer",
     "paths": {
-      "@shared/*": ["src/shared/*"],
-      "@renderer/*": ["src/renderer/*"],
-      "@/*": ["src/renderer/*"]
+      "@shared/*": ["./src/shared/*"],
+      "@renderer/*": ["./src/renderer/*"],
+      "@/*": ["./src/renderer/*"]
     }
   },
   "include": [
