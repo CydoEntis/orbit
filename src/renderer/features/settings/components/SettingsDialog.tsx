@@ -213,7 +213,7 @@ export function SettingsDialog(): JSX.Element {
 
           <div className="flex justify-end gap-2 pt-3 mt-2 border-t border-zinc-800 flex-shrink-0">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit">Save</Button>
+            <Button type="submit" className="bg-brand-green/20 text-brand-green hover:bg-brand-green/30">Save</Button>
           </div>
         </form>
       </DialogContent>

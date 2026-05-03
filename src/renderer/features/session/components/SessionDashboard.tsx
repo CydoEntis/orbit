@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, FolderOpen, FolderClosed, Plus, Terminal, Loader2, ExternalLink, Copy, ChevronDown, ChevronRight, Pencil, Check, Layers } from 'lucide-react'
+import { Input } from '../../../components/ui/input'
 import { createPortal } from 'react-dom'
 import { NewSessionForm } from './NewSessionForm'
 import { useStore } from '../../../store/root.store'
@@ -179,7 +180,7 @@ function CreateGroupModal({ pendingSessionId, onConfirm, onDismiss }: CreateGrou
     >
       <div className="bg-brand-surface border border-brand-panel/60 rounded-lg shadow-2xl p-4 w-72 flex flex-col gap-3">
         <h3 className="text-xs font-semibold text-zinc-300">New Group</h3>
-        <input
+        <Input
           ref={inputRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -188,7 +189,6 @@ function CreateGroupModal({ pendingSessionId, onConfirm, onDismiss }: CreateGrou
             if (e.key === 'Escape') onDismiss()
           }}
           placeholder="Group name…"
-          className="w-full bg-brand-panel border border-brand-panel/60 rounded px-2.5 py-1.5 text-xs text-zinc-100 outline-none focus:border-brand-green/60 placeholder:text-zinc-600"
         />
         <div className="flex flex-wrap gap-2">
           {GROUP_COLORS.map((c) => (
@@ -373,7 +373,7 @@ function GroupSection({ group, sessions, collapsed, onToggle, onRename, onDelete
           style={{ backgroundColor: group.color ?? '#71717a' }}
         />
         {renaming ? (
-          <input
+          <Input
             ref={inputRef}
             value={nameVal}
             onChange={(e) => setNameVal(e.target.value)}
@@ -382,7 +382,7 @@ function GroupSection({ group, sessions, collapsed, onToggle, onRename, onDelete
               if (e.key === 'Escape') setRenaming(false)
             }}
             onBlur={commitRename}
-            className="flex-1 bg-brand-panel border border-brand-green/50 rounded px-1 text-xs text-zinc-100 outline-none min-w-0"
+            className="flex-1 h-6 px-1 text-xs min-w-0"
           />
         ) : (
           <span
@@ -571,7 +571,7 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
               <NewSessionForm variant="sidebar" />
               <button
                 onClick={() => setCreateGroupModal({})}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs text-zinc-600 hover:bg-brand-panel hover:text-zinc-400 transition-colors rounded"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs text-zinc-500 hover:bg-brand-panel hover:text-brand-light transition-colors rounded"
                 title="New group"
               >
                 <Layers size={15} /> New Group

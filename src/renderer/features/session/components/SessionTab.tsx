@@ -7,6 +7,8 @@ import type { SessionMeta } from '@shared/ipc-types'
 import { killSession, patchSession } from '../session.service'
 import { useStore } from '../../../store/root.store'
 import { useConfirmClose } from '../hooks/useConfirmClose'
+import { Input } from '../../../components/ui/input'
+import { Label } from '../../../components/ui/label'
 
 const TAB_COLORS = [
   '#22c55e',
@@ -78,26 +80,23 @@ function EditModal({ meta, onSave, onDismiss }: EditModalProps): JSX.Element {
 
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-xs text-zinc-500">Name</label>
+            <Label className="text-xs text-zinc-500">Name</Label>
             <span className={cn('text-xs', name.trim().length > MAX_NAME_LENGTH ? 'text-red-400' : 'text-zinc-600')}>
               {name.trim().length}/{MAX_NAME_LENGTH}
             </span>
           </div>
-          <input
+          <Input
             ref={inputRef}
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleSave() }}
-            className={cn(
-              'bg-brand-panel border text-zinc-100 text-sm px-3 py-1.5 rounded outline-none transition-colors',
-              error ? 'border-red-500/70 focus:border-red-400' : 'border-brand-panel/80 focus:border-zinc-500'
-            )}
+            className={cn(error ? 'border-red-500/70 focus-visible:ring-0 focus:border-red-400' : '')}
           />
           {error && <span className="text-xs text-red-400">{error}</span>}
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-xs text-zinc-500">Color</label>
+          <Label className="text-xs text-zinc-500">Color</Label>
           <div className="flex gap-2 flex-wrap">
             {TAB_COLORS.map((c) => (
               <button

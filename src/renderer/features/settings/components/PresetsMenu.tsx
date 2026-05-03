@@ -1,11 +1,20 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Zap, Play, Trash2, Plus, FolderOpen } from 'lucide-react'
+import { Zap, Trash2, Plus, FolderOpen } from 'lucide-react'
 import { useStore } from '../../../store/root.store'
 import { createSession } from '../../session/session.service'
 import { pickFolder } from '../../window/window.service'
 import { cn } from '../../../lib/utils'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select'
+import { Input } from '../../../components/ui/input'
 import type { Preset } from '@shared/ipc-types'
+
+const AGENT_OPTIONS = [
+  { value: 'shell', label: 'Shell (plain)' },
+  { value: 'claude', label: 'Claude' },
+  { value: 'codex', label: 'Codex' },
+  { value: 'gemini', label: 'Gemini' },
+]
 
 interface AddFormState {
   name: string
@@ -14,7 +23,7 @@ interface AddFormState {
 }
 
 function AddPresetForm({ onSave, onCancel }: { onSave: (data: AddFormState) => void; onCancel: () => void }): JSX.Element {
-  const [form, setForm] = useState<AddFormState>({ name: '', agentCommand: 'claude', cwd: '' })
+  const [form, setForm] = useState<AddFormState>({ name: '', agentCommand: 'shell', cwd: '' })
 
   const handlePickFolder = async (): Promise<void> => {
     const folder = await pickFolder()
@@ -22,47 +31,50 @@ function AddPresetForm({ onSave, onCancel }: { onSave: (data: AddFormState) => v
   }
 
   return (
-    <div className="border-t border-zinc-800 p-3 flex flex-col gap-2">
-      <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">New Preset</p>
-      <input
+    <div className="border-t border-zinc-800 p-4 flex flex-col gap-3">
+      <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider">New Preset</p>
+      <Input
         autoFocus
         placeholder="Name"
         value={form.name}
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        className="w-full bg-brand-surface border border-brand-panel rounded px-2 py-1 text-xs text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-brand-green"
       />
-      <input
-        placeholder="Command (e.g. claude, codex)"
-        value={form.agentCommand}
-        onChange={(e) => setForm((f) => ({ ...f, agentCommand: e.target.value }))}
-        className="w-full bg-brand-surface border border-brand-panel rounded px-2 py-1 text-xs text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-brand-green"
-      />
-      <div className="flex gap-1">
-        <input
+      <Select value={form.agentCommand} onValueChange={(v) => setForm((f) => ({ ...f, agentCommand: v }))}>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {AGENT_OPTIONS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div className="flex gap-2">
+        <Input
           placeholder="Working dir (optional)"
           value={form.cwd}
           onChange={(e) => setForm((f) => ({ ...f, cwd: e.target.value }))}
-          className="flex-1 bg-brand-surface border border-brand-panel rounded px-2 py-1 text-xs text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-brand-green"
+          className="flex-1"
         />
         <button
           onClick={handlePickFolder}
-          className="px-2 py-1 rounded bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+          className="flex items-center justify-center px-3 rounded border border-brand-panel bg-brand-panel hover:bg-brand-panel/60 text-zinc-400 hover:text-zinc-200 transition-colors"
           title="Browse folder"
         >
-          <FolderOpen size={11} />
+          <FolderOpen size={14} />
         </button>
       </div>
-      <div className="flex gap-1.5 mt-1">
+      <div className="flex gap-2 mt-1">
         <button
           onClick={onCancel}
-          className="flex-1 py-1 text-xs rounded bg-brand-surface hover:bg-brand-panel text-zinc-400 transition-colors"
+          className="flex-1 py-2 text-sm rounded bg-brand-surface hover:bg-brand-panel text-zinc-400 transition-colors"
         >
           Cancel
         </button>
         <button
           onClick={() => form.name.trim() && onSave(form)}
           disabled={!form.name.trim()}
-          className="flex-1 py-1 text-xs rounded bg-brand-green hover:bg-brand-light disabled:opacity-40 text-brand-bg transition-colors"
+          className="flex-1 py-2 text-sm rounded bg-brand-green/20 text-brand-green hover:bg-brand-green/30 disabled:opacity-40 transition-colors"
         >
           Save
         </button>
@@ -87,9 +99,11 @@ export function PresetsMenu(): JSX.Element {
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent): void => {
+      const target = e.target as Element
       if (
-        menuRef.current?.contains(e.target as Node) ||
-        buttonRef.current?.contains(e.target as Node)
+        menuRef.current?.contains(target) ||
+        buttonRef.current?.contains(target) ||
+        target.closest('[data-radix-popper-content-wrapper]')
       )
         return
       setOpen(false)
@@ -122,7 +136,7 @@ export function PresetsMenu(): JSX.Element {
     const newPreset: Preset = {
       id: crypto.randomUUID(),
       name: data.name.trim(),
-      agentCommand: data.agentCommand.trim() || undefined,
+      agentCommand: data.agentCommand === 'shell' ? undefined : data.agentCommand.trim() || undefined,
       cwd: data.cwd.trim() || undefined
     }
     await updateSettings({ presets: [...presets, newPreset] })
@@ -156,7 +170,7 @@ export function PresetsMenu(): JSX.Element {
         createPortal(
           <div
             ref={menuRef}
-            style={{ position: 'fixed', zIndex: 9999, width: 256, ...menuStyle }}
+            style={{ position: 'fixed', zIndex: 9999, width: 300, ...menuStyle }}
             className="bg-brand-surface border border-brand-panel/60 rounded-lg shadow-2xl overflow-hidden"
           >
             <div className="max-h-64 overflow-y-auto">
@@ -166,7 +180,8 @@ export function PresetsMenu(): JSX.Element {
               {presets.map((p) => (
                 <div
                   key={p.id}
-                  className="flex items-center gap-2 px-3 py-2 hover:bg-brand-panel group transition-colors"
+                  onClick={() => launchPreset(p)}
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-brand-panel group transition-colors cursor-pointer"
                 >
                   <Zap size={11} className="text-brand-light flex-shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -177,14 +192,7 @@ export function PresetsMenu(): JSX.Element {
                     </p>
                   </div>
                   <button
-                    onClick={() => launchPreset(p)}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded text-zinc-400 hover:text-green-400 hover:bg-brand-panel transition-all"
-                    title="Launch"
-                  >
-                    <Play size={11} />
-                  </button>
-                  <button
-                    onClick={() => deletePreset(p.id)}
+                    onClick={(e) => { e.stopPropagation(); deletePreset(p.id) }}
                     className="opacity-0 group-hover:opacity-100 p-1 rounded text-zinc-400 hover:text-red-400 hover:bg-brand-panel transition-all"
                     title="Delete preset"
                   >

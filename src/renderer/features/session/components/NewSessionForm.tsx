@@ -214,7 +214,7 @@ export function NewSessionForm({ variant = 'icon' }: { variant?: 'icon' | 'sideb
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading} className="bg-brand-green/20 text-brand-green hover:bg-brand-green/30 disabled:opacity-40">
               {loading ? 'Launching...' : 'Launch'}
             </Button>
           </div>

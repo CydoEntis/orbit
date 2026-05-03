@@ -5,6 +5,7 @@ import { readDir, getGitStatus, renameEntry, trashEntry } from '../fs.service'
 import { FileTreeContextMenu } from './FileTreeContextMenu'
 import { useInstalledEditors } from '../hooks/useInstalledEditors'
 import { cn } from '../../../lib/utils'
+import { Input } from '../../../components/ui/input'
 import type { FsEntry, GitStatusEntry } from '@shared/ipc-types'
 
 function statusColor(xy: string): string {
@@ -105,14 +106,14 @@ function TreeNode({ entry, depth, gitMap, projectRoot, activeFilePath, renamingP
               : <File size={13} />}
           </span>
           {isRenaming ? (
-            <input
+            <Input
               ref={inputRef}
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
               onKeyDown={handleRenameKeyDown}
               onBlur={() => onRenameCancel()}
               onClick={(e) => e.stopPropagation()}
-              className="flex-1 bg-brand-panel border border-brand-green/50 rounded px-1 text-xs text-zinc-100 outline-none min-w-0"
+              className="flex-1 h-6 px-1 text-xs min-w-0"
             />
           ) : (
             <span className={cn('text-sm truncate flex-1', xy ? statusColor(xy) : 'text-zinc-300')}>

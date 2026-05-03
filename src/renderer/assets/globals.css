@@ -102,8 +102,8 @@
 }
 
 /* Text selection color — brand-green at low opacity */
-.file-content ::selection {
-  background-color: rgba(175, 255, 0, 0.18);
+::selection {
+  background-color: rgba(175, 255, 0, 0.25);
   color: inherit;
 }
 
@@ -212,7 +212,7 @@
 .markdown-body tr:nth-child(even) td { background: #18181b; }
 .markdown-body hr { border: none; border-top: 1px solid #3f3f46; margin: 1.5em 0; }
 .markdown-body img { max-width: 100%; border-radius: 4px; }
-.markdown-body ::selection { background-color: rgba(175, 255, 0, 0.18); color: inherit; }
+
 
 /* Sonner toast branding */
 [data-sonner-toaster] [data-sonner-toast] {
