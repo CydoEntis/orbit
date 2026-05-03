@@ -139,7 +139,12 @@ export function PresetsMenu(): JSX.Element {
       <button
         ref={buttonRef}
         onClick={() => { setOpen((v) => !v); setShowAdd(false) }}
-        className="flex items-center gap-1.5 px-2.5 h-7 rounded text-xs font-medium transition-colors bg-brand-green/20 text-brand-green hover:bg-brand-green/30"
+        className={cn(
+          'flex items-center gap-1.5 px-2.5 h-7 rounded text-xs font-medium transition-colors',
+          open
+            ? 'bg-brand-green/10 text-brand-light'
+            : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+        )}
         title="Launch presets"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >

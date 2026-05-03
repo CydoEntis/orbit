@@ -61,12 +61,11 @@ export function SettingsDialog(): JSX.Element {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <button
-          className="flex items-center gap-1.5 px-2.5 h-7 rounded text-xs font-medium transition-colors bg-brand-green/20 text-brand-green hover:bg-brand-green/30"
+          className="w-8 h-8 flex items-center justify-center rounded text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-colors"
           title="Settings"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-          <Settings size={13} />
-          <span>Settings</span>
+          <Settings size={14} />
         </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md flex flex-col" style={{ maxHeight: '80vh' }}>
