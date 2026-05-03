@@ -10,6 +10,7 @@ import { useConfirmClose } from '../hooks/useConfirmClose'
 import { useInstalledEditors } from '../../fs/hooks/useInstalledEditors'
 import { showInFolder, openInEditor, openPath } from '../../fs/fs.service'
 import { createSession, patchSession } from '../session.service'
+import { toast } from 'sonner'
 import { cn } from '../../../lib/utils'
 import type { SessionMeta } from '@shared/ipc-types'
 
@@ -467,7 +468,13 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
   const handleAssignGroup = useCallback(async (sessionId: string, groupId: string | null) => {
     const updated = await patchSession({ sessionId, groupId })
     upsertSession(updated)
-  }, [upsertSession])
+    if (groupId) {
+      const groupName = groups.find((g) => g.id === groupId)?.name
+      toast.success(`Moved to ${groupName ?? 'group'}`)
+    } else {
+      toast.success('Removed from group')
+    }
+  }, [upsertSession, groups])
 
   const handleCreateGroup = useCallback(async (name: string, color: string, assignSessionId?: string) => {
     const id = crypto.randomUUID()
@@ -476,6 +483,9 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
     if (assignSessionId) {
       const updated = await patchSession({ sessionId: assignSessionId, groupId: id })
       upsertSession(updated)
+      toast.success(`Group "${name}" created and session assigned`)
+    } else {
+      toast.success(`Group "${name}" created`)
     }
   }, [groups, updateSettings, upsertSession])
 
