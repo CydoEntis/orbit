@@ -2,7 +2,7 @@ import * as nodePty from 'node-pty'
 import { webContents } from 'electron'
 import { IPC } from '@shared/ipc-channels'
 import { SCROLLBACK_BYTE_LIMIT } from '@shared/constants'
-import type { SessionDataPayload } from '@shared/ipc-types'
+import type { AgentStatus, SessionDataPayload } from '@shared/ipc-types'
 
 interface PtyOptions {
   sessionId: string
@@ -12,7 +12,14 @@ interface PtyOptions {
   cols: number
   rows: number
   onCwdChange?: (cwd: string) => void
+  onAgentStatus?: (status: AgentStatus) => void
 }
+
+// Claude Code activity signals:
+// - Braille spinner chars (Unix)
+// - "* Word" pattern: asterisk + space + capitalized word (Windows Claude Code status)
+// - "executing |" from tool-use progress bar
+const AGENT_RUNNING_RE = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]|\* [A-Z][a-z]|executing \|/
 
 // UUID v4 pattern — used to detect Claude conversation IDs from PTY output
 const UUID_V4_RE = /\b[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i
@@ -25,12 +32,18 @@ export class PtyProcess {
   private scrollbackBytes = 0
   private conversationId: string | undefined
   private readonly onCwdChange?: (cwd: string) => void
+  private readonly onAgentStatus?: (status: AgentStatus) => void
+  private agentStatus: AgentStatus = 'idle'
+  private waitingTimer: ReturnType<typeof setTimeout> | null = null
+  private idleTimer: ReturnType<typeof setTimeout> | null = null
+  private detectionBuffer = ''
   readonly sessionId: string
   readonly subscriberIds = new Set<number>()
 
   constructor(opts: PtyOptions) {
     this.sessionId = opts.sessionId
     this.onCwdChange = opts.onCwdChange
+    this.onAgentStatus = opts.onAgentStatus
 
     this.pty = nodePty.spawn(opts.command, opts.args, {
       name: 'xterm-256color',
@@ -42,8 +55,36 @@ export class PtyProcess {
 
     this.pty.onData((data) => {
       this.appendScrollback(data)
+      this.detectAgentStatus(data)
       this.fanOut(data)
     })
+  }
+
+  private setAgentStatus(status: AgentStatus): void {
+    if (this.agentStatus === status) return
+    this.agentStatus = status
+    this.onAgentStatus?.(status)
+  }
+
+  private detectAgentStatus(chunk: string): void {
+    this.detectionBuffer = (this.detectionBuffer + chunk).slice(-300)
+    if (!AGENT_RUNNING_RE.test(this.detectionBuffer)) return
+    this.detectionBuffer = ''
+
+    this.setAgentStatus('running')
+
+    // Clear any pending transition timers — agent is still active
+    if (this.waitingTimer) { clearTimeout(this.waitingTimer); this.waitingTimer = null }
+    if (this.idleTimer) { clearTimeout(this.idleTimer); this.idleTimer = null }
+
+    // After 10s of no spinner/executing activity → waiting-input
+    this.waitingTimer = setTimeout(() => {
+      this.setAgentStatus('waiting-input')
+      // After 20s of waiting with no new activity → idle
+      this.idleTimer = setTimeout(() => {
+        this.setAgentStatus('idle')
+      }, 20_000)
+    }, 10_000)
   }
 
   private appendScrollback(chunk: string): void {
@@ -114,6 +155,8 @@ export class PtyProcess {
   }
 
   kill(signal?: string): void {
+    if (this.waitingTimer) clearTimeout(this.waitingTimer)
+    if (this.idleTimer) clearTimeout(this.idleTimer)
     this.pty.kill(signal)
   }
 }
