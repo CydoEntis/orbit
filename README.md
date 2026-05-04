@@ -17,6 +17,12 @@
 
 ---
 
+<p align="center">
+  <img src="dominion.png" alt="Dominion screenshot" width="100%" />
+</p>
+
+---
+
 ## Download
 
 Head to the [Releases](https://github.com/CydoEntis/dominion/releases/latest) page and grab the installer for your platform.
