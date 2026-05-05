@@ -120,6 +120,8 @@ export const HotkeysSchema = z.object({
   commandPalette: z.string().default('Ctrl+P'),
   toggleDashboard: z.string().default('Ctrl+D'),
   openProject: z.string().default('Ctrl+O'),
+  newNote: z.string().default('Ctrl+N'),
+  quickNote: z.string().default('Ctrl+Shift+N'),
 })
 export type Hotkeys = z.infer<typeof HotkeysSchema>
 
@@ -148,8 +150,12 @@ export const AppSettingsSchema = z.object({
   scrollbackLines: z.number().int().min(100).max(100000).default(10000),
   presets: z.array(PresetSchema).default([]),
   hotkeys: HotkeysSchema.default({}),
-  confirmCloseSession: z.boolean().default(true)
+  confirmCloseSession: z.boolean().default(true),
+  notes: z.array(z.object({ id: z.string(), content: z.string().default(''), updatedAt: z.number().default(0) })).default([])
 })
+
+export const NoteSchema = z.object({ id: z.string(), content: z.string().default(''), updatedAt: z.number().default(0) })
+export type Note = z.infer<typeof NoteSchema>
 export type AppSettings = z.infer<typeof AppSettingsSchema>
 
 export const DEFAULT_SETTINGS: AppSettings = AppSettingsSchema.parse({})

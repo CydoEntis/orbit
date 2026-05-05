@@ -4,6 +4,8 @@ import { killSession } from '../session.service'
 
 interface Callbacks {
   onTogglePalette: () => void
+  onNewNote: () => void
+  onNewNoteDrawer: () => void
 }
 
 function match(e: KeyboardEvent, binding: string): boolean {
@@ -17,7 +19,7 @@ function match(e: KeyboardEvent, binding: string): boolean {
   )
 }
 
-export function useKeyboardShortcuts({ onTogglePalette }: Callbacks): void {
+export function useKeyboardShortcuts({ onTogglePalette, onNewNote, onNewNoteDrawer }: Callbacks): void {
   const removeTab = useStore((s) => s.removeTab)
   const settings = useStore((s) => s.settings)
   const activeSessionId = useStore((s) => s.activeSessionId)
@@ -25,16 +27,26 @@ export function useKeyboardShortcuts({ onTogglePalette }: Callbacks): void {
   const settingsRef = useRef(settings)
   const activeSessionIdRef = useRef(activeSessionId)
   const onTogglePaletteRef = useRef(onTogglePalette)
+  const onNewNoteRef = useRef(onNewNote)
+  const onNewNoteDrawerRef = useRef(onNewNoteDrawer)
 
   useEffect(() => { settingsRef.current = settings }, [settings])
   useEffect(() => { activeSessionIdRef.current = activeSessionId }, [activeSessionId])
   useEffect(() => { onTogglePaletteRef.current = onTogglePalette }, [onTogglePalette])
+  useEffect(() => { onNewNoteRef.current = onNewNote }, [onNewNote])
+  useEffect(() => { onNewNoteDrawerRef.current = onNewNoteDrawer }, [onNewNoteDrawer])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       const hk = settingsRef.current.hotkeys
 
-      if (match(e, hk.newSession)) {
+      if (match(e, hk.quickNote)) {
+        e.preventDefault(); e.stopPropagation()
+        onNewNoteDrawerRef.current()
+      } else if (match(e, hk.newNote)) {
+        e.preventDefault(); e.stopPropagation()
+        onNewNoteRef.current()
+      } else if (match(e, hk.newSession)) {
         e.preventDefault(); e.stopPropagation()
         document.dispatchEvent(new CustomEvent('acc:new-session'))
       } else if (match(e, hk.openProject)) {

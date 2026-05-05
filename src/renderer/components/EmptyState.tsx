@@ -47,6 +47,9 @@ export function EmptyState(): JSX.Element {
         <KeybindEntry hotkey={hotkeys.commandPalette} label="Command palette" action={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, bubbles: true }))} />
         <KeybindEntry hotkey={hotkeys.toggleDashboard} label="Toggle sidebar" action={() => document.dispatchEvent(new CustomEvent('acc:toggle-sidebar'))} />
         <div className="h-px bg-brand-panel/50 mx-3 my-1" />
+        <KeybindEntry hotkey={hotkeys.newNote} label="New note" action={() => document.dispatchEvent(new CustomEvent('acc:new-note'))} />
+        <KeybindEntry hotkey={hotkeys.quickNote} label="Quick note" action={() => document.dispatchEvent(new CustomEvent('acc:quick-note'))} />
+        <div className="h-px bg-brand-panel/50 mx-3 my-1" />
         <KeybindEntry hotkey={hotkeys.closeSession} label="Close active tab" />
         <KeybindEntry hotkey="Ctrl+Shift+D" label="Detach pane to window" />
       </div>

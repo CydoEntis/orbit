@@ -71,12 +71,15 @@ export function useCommandPalette(open: boolean, onClose: () => void): {
       }
     }))
 
+  const hk = settings.hotkeys
   const actions: PaletteItem[] = [
-    { id: 'new-session',   label: 'New Session',           description: 'Ctrl+T',       iconName: 'Plus',       action: () => { document.dispatchEvent(new CustomEvent('acc:new-session'));   onClose() } },
-    { id: 'open-project',  label: 'Open Project',          description: 'Ctrl+O',       iconName: 'FolderOpen', action: () => { document.dispatchEvent(new CustomEvent('acc:open-project'));  onClose() } },
-    { id: 'toggle-sidebar',label: 'Toggle Sidebar',        description: 'Ctrl+B',       iconName: 'PanelLeft',  action: () => { toggleDashboard();                                            onClose() } },
-    { id: 'close-tab',     label: 'Close Active Tab',      description: 'Ctrl+W',       iconName: 'X',          action: () => { document.dispatchEvent(new CustomEvent('acc:close-tab'));    onClose() } },
-    { id: 'detach-pane',   label: 'Detach Pane to Window', description: 'Ctrl+Shift+D', iconName: 'Maximize2',  action: () => { document.dispatchEvent(new CustomEvent('acc:detach-pane')); onClose() } },
+    { id: 'new-session',   label: 'New Session',           description: hk.newSession,   iconName: 'Plus',        action: () => { document.dispatchEvent(new CustomEvent('acc:new-session'));   onClose() } },
+    { id: 'open-project',  label: 'Open Project',          description: hk.openProject,  iconName: 'FolderOpen',  action: () => { document.dispatchEvent(new CustomEvent('acc:open-project'));  onClose() } },
+    { id: 'toggle-sidebar',label: 'Toggle Sidebar',        description: hk.toggleDashboard, iconName: 'PanelLeft', action: () => { toggleDashboard();                                          onClose() } },
+    { id: 'new-note',      label: 'New Note',              description: hk.newNote,      iconName: 'NotebookPen', action: () => { document.dispatchEvent(new CustomEvent('acc:new-note'));     onClose() } },
+    { id: 'quick-note',    label: 'Quick Note',            description: hk.quickNote,    iconName: 'NotebookPen', action: () => { document.dispatchEvent(new CustomEvent('acc:quick-note'));   onClose() } },
+    { id: 'close-tab',     label: 'Close Active Tab',      description: hk.closeSession, iconName: 'X',           action: () => { document.dispatchEvent(new CustomEvent('acc:close-tab'));   onClose() } },
+    { id: 'detach-pane',   label: 'Detach Pane to Window', description: 'Ctrl+Shift+D', iconName: 'Maximize2',   action: () => { document.dispatchEvent(new CustomEvent('acc:detach-pane')); onClose() } },
   ].filter((a) => !q || a.label.toLowerCase().includes(q))
 
   actions.forEach((a) => items.push(a))

@@ -21,6 +21,7 @@ export const IPC = {
   WINDOW_GET_ID: 'window:get-id',
   WINDOW_DETACH_TAB: 'window:detach-tab',
   WINDOW_CONTROL: 'window:control',
+  WINDOW_OPEN_SETTINGS: 'window:open-settings',
 
   WINDOW_REATTACH_TAB: 'window:reattach-tab',
 
@@ -49,6 +50,7 @@ export const IPC = {
   UPDATE_INSTALL: 'update:install',
 
   // Filesystem: renderer → main (invoke)
+  FS_DETECT_SHELLS: 'fs:detect-shells',
   FS_READ_DIR: 'fs:read-dir',
   FS_READ_FILE: 'fs:read-file',
   FS_GIT_STATUS: 'fs:git-status',

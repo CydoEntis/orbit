@@ -5,14 +5,18 @@ import { TitleBar } from './components/TitleBar'
 import { TabBar } from './components/TabBar'
 import { EmptyState } from './components/EmptyState'
 import { TerminalPane } from './features/terminal/components/TerminalPane'
-import { SettingsDialog } from './features/settings/components/SettingsDialog'
 import { PaneContextMenu } from './features/session/components/PaneContextMenu'
 import { SessionDashboard } from './features/session/components/SessionDashboard'
+import { NotepadPane } from './components/NotepadPane'
+import { NoteEditor } from './components/NoteEditor'
+import { NoteDrawer } from './components/NoteDrawer'
 import { ActivityBar } from './components/ActivityBar'
+import { SettingsForm } from './features/settings/components/SettingsForm'
 import { CommandPalette } from './components/CommandPalette'
 import { FileViewer, VIEWER_THEMES } from './features/fs/components/FileViewer'
 import type { FilePaneTab } from './features/fs/hooks/useFilePane'
-import { defaultTab } from './features/fs/hooks/useFilePane'
+import { createSession, killSession } from './features/session/session.service'
+import { detachTab, reattachTab } from './features/window/window.service'
 import { useSessionLifecycle } from './features/session/hooks/useSessionLifecycle'
 import { useLayoutPersistence } from './features/session/hooks/useLayoutPersistence'
 import { useLayoutRestore } from './features/session/hooks/useLayoutRestore'
@@ -22,7 +26,6 @@ import { useFileTabs } from './features/session/hooks/useFileTabs'
 import { useAutoUpdater } from './features/updater/hooks/useAutoUpdater'
 import { useStore } from './store/root.store'
 import { cn } from './lib/utils'
-import { Kbd } from './components/Kbd'
 import type { PaneNode } from './features/terminal/pane-tree'
 
 interface ContextMenuTarget {
@@ -46,14 +49,23 @@ function PaneTreeRenderer({
   const setFocusedSession = useStore((s) => s.setFocusedSession)
 
   if (node.type === 'leaf') {
-    const isActive = focusedSessionId === node.sessionId
+    const sid = node.sessionId
+    const splitPane = useStore.getState().splitPane
+    const closePane = useStore.getState().closePane
+    const detachPane = useStore.getState().detachPane
+    const windowId = useStore.getState().windowId
+    const paneItems = [
+      { label: 'Split Horizontal', action: async () => { const m = await createSession({ name: `${useStore.getState().sessions[sid]?.name ?? 'pane'} split`, cols: 80, rows: 24 }); splitPane(tabId, sid, 'horizontal', m) } },
+      { label: 'Split Vertical', action: async () => { const m = await createSession({ name: `${useStore.getState().sessions[sid]?.name ?? 'pane'} split`, cols: 80, rows: 24 }); splitPane(tabId, sid, 'vertical', m) } },
+      { label: 'Detach to Window', action: async () => { detachPane(tabId, sid); if (windowId) await detachTab(sid, windowId) } },
+      { label: 'Close Pane', action: async () => { await killSession(sid); closePane(tabId, sid) } },
+    ]
     return (
       <div
         className="flex flex-col w-full h-full"
-        onMouseDown={() => setFocusedSession(node.sessionId)}
-        onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, node.sessionId, tabId) }}
+        onMouseDown={() => setFocusedSession(sid)}
       >
-        <TerminalPane sessionId={node.sessionId} />
+        <TerminalPane sessionId={sid} paneItems={paneItems} />
       </div>
     )
   }
@@ -88,7 +100,9 @@ export function App(): JSX.Element {
 
   const [contextMenu, setContextMenu] = useState<ContextMenuTarget | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [sidebarTab, setSidebarTab] = useState<'sessions' | 'projects'>('sessions')
+  const [sidebarTab, setSidebarTab] = useState<'sessions' | 'projects' | 'notes' | 'settings'>('sessions')
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
+  const [noteDrawerOpen, setNoteDrawerOpen] = useState(false)
   const [refreshTick, setRefreshTick] = useState(0)
   const [fileViewTab, setFileViewTab] = useState<FilePaneTab>('content')
   const [showThemePicker, setShowThemePicker] = useState(false)
@@ -117,7 +131,27 @@ export function App(): JSX.Element {
   const { openFiles, activeFilePath, setActiveFilePath, handleFileClick, handleCloseFile } = useFileTabs()
   const { handleSplitH, handleSplitV, handleDetach, handleReattach, handleClose } = usePaneActions(contextMenu)
 
-  useKeyboardShortcuts({ onTogglePalette: () => setPaletteOpen((v) => !v) })
+  const createNote = useCallback((): string => {
+    const id = crypto.randomUUID()
+    const current = useStore.getState().settings.notes ?? []
+    updateSettings({ notes: [{ id, content: '', updatedAt: Date.now() }, ...current] })
+    return id
+  }, [updateSettings])
+
+  useKeyboardShortcuts({
+    onTogglePalette: () => setPaletteOpen((v) => !v),
+    onNewNote: useCallback(() => {
+      const id = createNote()
+      setActiveNoteId(id)
+      if (!isDashboardOpen) useStore.getState().toggleDashboard()
+      setSidebarTab('notes')
+    }, [createNote, isDashboardOpen]),
+    onNewNoteDrawer: useCallback(() => {
+      const id = createNote()
+      setActiveNoteId(id)
+      setNoteDrawerOpen(true)
+    }, [createNote]),
+  })
 
   // Keep refs so the one-time effects below always see current values
   const sidebarTabRef = useRef(sidebarTab)
@@ -143,6 +177,27 @@ export function App(): JSX.Element {
     document.addEventListener('acc:open-file', handler)
     return () => document.removeEventListener('acc:open-file', handler)
   }, [])
+
+  // Note creation events dispatched by EmptyState and CommandPalette
+  useEffect(() => {
+    const handleNewNote = (): void => {
+      const id = createNote()
+      setActiveNoteId(id)
+      if (!isDashboardOpenRef.current) useStore.getState().toggleDashboard()
+      setSidebarTab('notes')
+    }
+    const handleQuickNote = (): void => {
+      const id = createNote()
+      setActiveNoteId(id)
+      setNoteDrawerOpen(true)
+    }
+    document.addEventListener('acc:new-note', handleNewNote)
+    document.addEventListener('acc:quick-note', handleQuickNote)
+    return () => {
+      document.removeEventListener('acc:new-note', handleNewNote)
+      document.removeEventListener('acc:quick-note', handleQuickNote)
+    }
+  }, [createNote])
 
   // File viewer keybinds: Alt+R → raw, Alt+P → preview (md only), Alt+D → diff (changed files)
   useEffect(() => {
@@ -171,7 +226,7 @@ export function App(): JSX.Element {
     []
   )
 
-  const handleActivityChange = (next: 'sessions' | 'projects'): void => {
+  const handleActivityChange = (next: 'sessions' | 'projects' | 'notes' | 'settings'): void => {
     if (next === sidebarTab && isDashboardOpen) {
       useStore.getState().toggleDashboard()
     } else {
@@ -184,10 +239,16 @@ export function App(): JSX.Element {
   const activeMeta = activeSessionId ? sessions[activeSessionId] : null
   const titleBarTitle = sidebarTab === 'sessions'
     ? (activeMeta?.name ?? 'No session')
-    : (activeFilePath ? activeFilePath.replace(/\\/g, '/').split('/').pop() ?? activeFilePath : 'Projects')
+    : sidebarTab === 'notes'
+      ? 'Notes'
+      : sidebarTab === 'settings'
+        ? 'Settings'
+        : (activeFilePath ? activeFilePath.replace(/\\/g, '/').split('/').pop() ?? activeFilePath : 'Projects')
   const titleBarSubtitle = sidebarTab === 'sessions'
     ? (activeMeta?.cwd ?? '')
-    : (activeFilePath ? activeFilePath.replace(/\\/g, '/') : '')
+    : sidebarTab === 'notes' || sidebarTab === 'settings'
+      ? ''
+      : (activeFilePath ? activeFilePath.replace(/\\/g, '/') : '')
 
   return (
     <div className="flex flex-col h-screen bg-brand-bg text-zinc-100 overflow-hidden dark">
@@ -196,16 +257,20 @@ export function App(): JSX.Element {
       <div className="flex flex-1 min-h-0">
         <ActivityBar activity={sidebarTab} panelOpen={isDashboardOpen} onChange={handleActivityChange} />
 
-        {isDashboardOpen && (
+        {isDashboardOpen && sidebarTab !== 'settings' && (
           <>
             <div style={{ width: sidebarWidth, flexShrink: 0 }} className="flex flex-col h-full">
-              <SessionDashboard
-                onFileClick={handleFileClick}
-                activeTab={sidebarTab}
-                activeFilePath={activeFilePath}
-                externalRefreshTick={refreshTick}
-                onSwitchToSessions={() => setSidebarTab('sessions')}
-              />
+              {sidebarTab === 'notes' ? (
+                <NotepadPane activeNoteId={activeNoteId} onActivate={setActiveNoteId} onCreate={() => { const id = createNote(); setActiveNoteId(id) }} />
+              ) : (
+                <SessionDashboard
+                  onFileClick={handleFileClick}
+                  activeTab={sidebarTab}
+                  activeFilePath={activeFilePath}
+                  externalRefreshTick={refreshTick}
+                  onSwitchToSessions={() => setSidebarTab('sessions')}
+                />
+              )}
             </div>
             <div
               className="w-1 flex-shrink-0 bg-brand-panel hover:bg-brand-green transition-colors cursor-col-resize"
@@ -215,15 +280,14 @@ export function App(): JSX.Element {
         )}
 
         {/* Sessions content — tab bar + pane area */}
-        <div className={cn('flex-1 min-w-0 min-h-0', (isDashboardOpen && sidebarTab === 'projects') ? 'hidden' : 'flex flex-col')}>
-          {tabOrder.length > 0 && (
+        <div className={cn('flex-1 min-w-0 min-h-0', (isDashboardOpen && (sidebarTab === 'projects' || sidebarTab === 'notes' || sidebarTab === 'settings')) ? 'hidden' : 'flex flex-col')}>
+          {tabOrder.length > 0 && !(isDashboardOpen && sidebarTab === 'sessions') && (
             <TabBar
               activity="sessions"
               openFiles={openFiles}
               activeFilePath={activeFilePath}
               onActivateFile={setActiveFilePath}
               onCloseFile={handleCloseFile}
-              onRefresh={() => setRefreshTick((t) => t + 1)}
             />
           )}
           <div className="flex-1 min-h-0 relative">
@@ -240,6 +304,20 @@ export function App(): JSX.Element {
           </div>
         </div>
 
+        {/* Notes content — full editor */}
+        {isDashboardOpen && sidebarTab === 'notes' && (
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+            <NoteEditor activeNoteId={activeNoteId} onActivate={setActiveNoteId} onCreate={() => { const id = createNote(); setActiveNoteId(id) }} />
+          </div>
+        )}
+
+        {/* Settings content — full-width form */}
+        {isDashboardOpen && sidebarTab === 'settings' && (
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+            <SettingsForm onClose={() => useStore.getState().toggleDashboard()} />
+          </div>
+        )}
+
         {/* Projects content — tab bar + file viewer */}
         {isDashboardOpen && sidebarTab === 'projects' && (
           <div className="flex-1 min-w-0 min-h-0 flex flex-col">
@@ -250,7 +328,6 @@ export function App(): JSX.Element {
                 activeFilePath={activeFilePath}
                 onActivateFile={setActiveFilePath}
                 onCloseFile={handleCloseFile}
-                onRefresh={() => setRefreshTick((t) => t + 1)}
               />
             )}
             <FileViewer files={openFiles} activeFilePath={activeFilePath} onActivate={setActiveFilePath} onClose={handleCloseFile} tab={fileViewTab} onTabChange={setFileViewTab} />
@@ -297,7 +374,6 @@ export function App(): JSX.Element {
               </>
             )
           })()}
-          <SettingsDialog />
         </div>
       </div>
 
@@ -315,6 +391,7 @@ export function App(): JSX.Element {
         />
       )}
 
+      <NoteDrawer open={noteDrawerOpen} onClose={() => setNoteDrawerOpen(false)} activeNoteId={activeNoteId} onCreate={() => { const id = createNote(); setActiveNoteId(id) }} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <Toaster position="bottom-right" theme="dark" richColors />
     </div>
