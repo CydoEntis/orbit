@@ -55,7 +55,17 @@
       "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
       "Bash(grep -E \"shared.*\\\\.\\(ts|tsx\\)$\")",
       "Bash(Select-Object FullName)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(Get-Content \"C:\\\\Users\\\\cstin\\\\.claude\\\\projects\\\\C--Programming-command-center\\\\609db581-d882-47ad-a12f-573a848de625.jsonl\")",
+      "Bash(Select-Object -Last 5)",
+      "Bash(cat electron-builder.yml)",
+      "Bash(cat electron-builder.json)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.build||{},null,2\\)\\)\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Test-Path *)",
+      "Skill(gsd-pause-work)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k: d[k] for k in ['name','version','scripts'] if k in d}, indent=2\\)\\)\")",
+      "Bash(git *)"
     ]
   }
 }

@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Plus, X } from 'lucide-react'
+import { marked } from 'marked'
 import { useStore } from '../store/root.store'
 import { cn } from '../lib/utils'
 import type { Note } from '@shared/ipc-types'
@@ -25,6 +26,7 @@ export function NoteEditor({ activeNoteId, onActivate, onCreate }: Props): JSX.E
   const effectiveId = activeNote?.id ?? null
 
   const [displayContent, setDisplayContent] = useState(activeNote?.content ?? '')
+  const [viewMode, setViewMode] = useState<'raw' | 'preview'>('raw')
   const localContentRef = useRef(activeNote?.content ?? '')
   const prevIdRef = useRef<string | null>(effectiveId)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -41,10 +43,27 @@ export function NoteEditor({ activeNoteId, onActivate, onCreate }: Props): JSX.E
       const content = activeNote?.content ?? ''
       localContentRef.current = content
       setDisplayContent(content)
+      setViewMode('raw')
     }
   }, [effectiveId, flushSave])
 
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current) }, [])
+
+  // Alt+R → raw, Alt+P → preview
+  useEffect(() => {
+    const handler = (e: KeyboardEvent): void => {
+      if (!e.altKey || e.ctrlKey || e.shiftKey || e.metaKey) return
+      if (e.key === 'r' || e.key === 'R') { e.preventDefault(); setViewMode('raw') }
+      else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setViewMode('preview') }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
+  const previewHtml = useMemo(() => {
+    if (viewMode !== 'preview') return ''
+    try { return marked.parse(displayContent) as string } catch { return '' }
+  }, [viewMode, displayContent])
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
     const value = e.target.value
@@ -58,6 +77,8 @@ export function NoteEditor({ activeNoteId, onActivate, onCreate }: Props): JSX.E
     e.stopPropagation()
     deleteNote(id)
   }
+
+  const btnBase = 'inline-flex items-center px-2 h-5 text-[10px] rounded transition-colors'
 
   if (notes.length === 0) {
     return (
@@ -73,40 +94,68 @@ export function NoteEditor({ activeNoteId, onActivate, onCreate }: Props): JSX.E
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-brand-bg">
       <div
-        className="flex items-center h-[52px] border-b border-brand-panel bg-brand-bg overflow-x-auto flex-shrink-0"
+        className="flex items-center h-[52px] border-b border-brand-panel bg-brand-bg flex-shrink-0"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        {sorted.map(note => (
-          <div
-            key={note.id}
-            onClick={() => onActivate(note.id)}
-            className={cn(
-              'flex items-center gap-2 px-4 h-full text-xs cursor-pointer flex-shrink-0 border-r border-brand-panel/40 group',
-              note.id === effectiveId
-                ? 'text-zinc-200 bg-brand-bg border-t-2 border-t-brand-green'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-brand-panel/30'
-            )}
-          >
-            <span className="max-w-[140px] truncate">{noteTitle(note)}</span>
-            <button
-              onClick={(e) => handleDelete(note.id, e)}
-              className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-zinc-300 transition-all flex-shrink-0"
-              title="Delete note"
+        <div className="flex items-center flex-1 min-w-0 overflow-x-auto h-full">
+          {sorted.map(note => (
+            <div
+              key={note.id}
+              onClick={() => onActivate(note.id)}
+              className={cn(
+                'flex items-center gap-2 px-4 h-full text-xs cursor-pointer flex-shrink-0 border-r border-brand-panel/40 group',
+                note.id === effectiveId
+                  ? 'text-zinc-200 bg-brand-bg border-t-2 border-t-brand-green'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-brand-panel/30'
+              )}
             >
-              <X size={10} />
+              <span className="max-w-[140px] truncate">{noteTitle(note)}</span>
+              <button
+                onClick={(e) => handleDelete(note.id, e)}
+                className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-zinc-300 transition-all flex-shrink-0"
+                title="Delete note"
+              >
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={onCreate}
+            className="flex items-center justify-center w-10 h-full text-zinc-500 hover:text-zinc-300 hover:bg-brand-panel/30 transition-colors flex-shrink-0"
+            title="New note (Ctrl+N)"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+
+        {activeNote && (
+          <div className="flex items-center gap-1 px-3 flex-shrink-0 border-l border-brand-panel/40 h-full">
+            <button
+              onClick={() => setViewMode('raw')}
+              className={cn(btnBase, viewMode === 'raw' ? 'bg-brand-panel text-brand-light' : 'text-zinc-600 hover:text-zinc-300')}
+            >
+              Raw
+            </button>
+            <button
+              onClick={() => setViewMode('preview')}
+              className={cn(btnBase, viewMode === 'preview' ? 'bg-brand-panel text-brand-light' : 'text-zinc-600 hover:text-zinc-300')}
+            >
+              Preview
             </button>
           </div>
-        ))}
-        <button
-          onClick={onCreate}
-          className="flex items-center justify-center w-10 h-full text-zinc-500 hover:text-zinc-300 hover:bg-brand-panel/30 transition-colors flex-shrink-0"
-          title="New note (Ctrl+N)"
-        >
-          <Plus size={14} />
-        </button>
+        )}
       </div>
 
-      {activeNote && (
+      {activeNote && viewMode === 'preview' && (
+        <div className="flex-1 overflow-auto select-text cursor-text">
+          {previewHtml
+            ? <div className="markdown-body px-8 py-6" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+            : <p className="text-zinc-500 text-xs px-8 py-6">Nothing to preview.</p>
+          }
+        </div>
+      )}
+
+      {activeNote && viewMode === 'raw' && (
         <textarea
           value={displayContent}
           onChange={handleChange}

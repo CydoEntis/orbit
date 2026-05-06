@@ -1,4 +1,5 @@
-import { Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, Trash2, Search } from 'lucide-react'
 import { useStore } from '../store/root.store'
 import { cn } from '../lib/utils'
 import type { Note } from '@shared/ipc-types'
@@ -31,8 +32,12 @@ interface Props {
 export function NotepadPane({ activeNoteId, onActivate, onCreate }: Props): JSX.Element {
   const notes = useStore((s) => s.notes)
   const deleteNote = useStore((s) => s.deleteNote)
+  const [query, setQuery] = useState('')
 
   const sorted = notes.slice().sort((a, b) => b.updatedAt - a.updatedAt)
+  const filtered = query
+    ? sorted.filter((n) => n.content.toLowerCase().includes(query.toLowerCase()))
+    : sorted
 
   return (
     <div className="flex flex-col h-full bg-brand-bg">
@@ -47,8 +52,18 @@ export function NotepadPane({ activeNoteId, onActivate, onCreate }: Props): JSX.
         </button>
       </div>
 
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-brand-panel/40 flex-shrink-0">
+        <Search size={11} className="text-zinc-600 flex-shrink-0" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search notes…"
+          className="flex-1 bg-transparent text-xs text-zinc-300 placeholder:text-zinc-600 outline-none"
+        />
+      </div>
+
       <div className="flex-1 overflow-y-auto">
-        {sorted.length === 0 && (
+        {filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-2 px-4">
             <p className="text-xs text-zinc-600 text-center">No notes yet</p>
             <button onClick={onCreate} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
@@ -56,7 +71,7 @@ export function NotepadPane({ activeNoteId, onActivate, onCreate }: Props): JSX.
             </button>
           </div>
         )}
-        {sorted.map(note => (
+        {filtered.map(note => (
           <button
             key={note.id}
             onClick={() => onActivate(note.id)}
