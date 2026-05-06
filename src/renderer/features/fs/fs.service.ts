@@ -42,6 +42,14 @@ export async function trashEntry(filePath: string): Promise<void> {
   return ipc.invoke(IPC.FS_TRASH, { filePath }) as Promise<void>
 }
 
+export async function findFiles(rootPath: string): Promise<string[]> {
+  return ipc.invoke(IPC.FS_FIND_FILES, { rootPath }) as Promise<string[]>
+}
+
 export function openExternal(url: string): Promise<void> {
   return ipc.invoke(IPC.SHELL_OPEN_EXTERNAL, { url }) as Promise<void>
+}
+
+export function readClipboard(): Promise<string> {
+  return ipc.invoke(IPC.CLIPBOARD_READ_TEXT) as Promise<string>
 }

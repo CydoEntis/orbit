@@ -122,6 +122,8 @@ export const HotkeysSchema = z.object({
   openProject: z.string().default('Ctrl+O'),
   newNote: z.string().default('Ctrl+N'),
   quickNote: z.string().default('Ctrl+Shift+N'),
+  fileSearch: z.string().default('Ctrl+Shift+P'),
+  showShortcuts: z.string().default('?'),
 })
 export type Hotkeys = z.infer<typeof HotkeysSchema>
 

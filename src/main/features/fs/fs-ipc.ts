@@ -1,4 +1,4 @@
-import { ipcMain, shell } from 'electron'
+import { ipcMain, shell, clipboard } from 'electron'
 import { promises as fs } from 'fs'
 import { join, dirname } from 'path'
 import { exec, spawn } from 'child_process'
@@ -137,6 +137,26 @@ export function registerFsIpc(): void {
 
   ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, (_event, { url }: { url: string }) => {
     return shell.openExternal(url)
+  })
+
+  ipcMain.handle(IPC.CLIPBOARD_READ_TEXT, () => clipboard.readText())
+
+  ipcMain.handle(IPC.FS_FIND_FILES, async (_, { rootPath }: { rootPath: string }): Promise<string[]> => {
+    const results: string[] = []
+    const MAX = 5000
+    async function walk(dir: string): Promise<void> {
+      if (results.length >= MAX) return
+      let entries: import('fs').Dirent[]
+      try { entries = await fs.readdir(dir, { withFileTypes: true }) } catch { return }
+      for (const e of entries) {
+        if (IGNORE.has(e.name)) continue
+        const full = join(dir, e.name)
+        if (e.isDirectory()) { await walk(full) }
+        else { results.push(full); if (results.length >= MAX) return }
+      }
+    }
+    await walk(rootPath)
+    return results
   })
 
   ipcMain.handle(IPC.FS_GIT_DIFF_FILE, async (_, { projectRoot, filePath }: { projectRoot: string; filePath: string }): Promise<string | null> => {

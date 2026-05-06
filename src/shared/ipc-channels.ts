@@ -61,6 +61,7 @@ export const IPC = {
   FS_DETECT_EDITORS: 'fs:detect-editors',
   FS_RENAME: 'fs:rename',
   FS_TRASH: 'fs:trash',
+  FS_FIND_FILES: 'fs:find-files',
 
   // Notes: renderer → main (invoke)
   NOTES_LOAD: 'notes:load',
@@ -68,7 +69,10 @@ export const IPC = {
   NOTES_DELETE: 'notes:delete',
 
   // Shell: renderer → main (invoke)
-  SHELL_OPEN_EXTERNAL: 'shell:open-external'
+  SHELL_OPEN_EXTERNAL: 'shell:open-external',
+
+  // Clipboard: renderer → main (invoke)
+  CLIPBOARD_READ_TEXT: 'clipboard:read-text'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

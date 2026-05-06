@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { ipc } from '../../../lib/ipc'
 import { IPC } from '@shared/ipc-channels'
 import { replayRequest, writeToSession, resizeSession } from '../../session/session.service'
-import { openExternal } from '../../fs/fs.service'
+import { openExternal, readClipboard } from '../../fs/fs.service'
 import { useStore } from '../../../store/root.store'
 import type { SessionDataPayload } from '@shared/ipc-types'
 
@@ -104,13 +104,13 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
     // Ctrl+Shift+V → paste; Ctrl+C → copy selection if non-empty, otherwise SIGINT
     terminal.attachCustomKeyEventHandler((e) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'V' && e.type === 'keydown') {
-        navigator.clipboard.readText().then((text) => terminal.paste(text)).catch(() => {})
+        readClipboard().then((text) => { terminal.paste(text); terminal.focus() }).catch(() => {})
         return false
       }
       if (e.ctrlKey && !e.shiftKey && e.key === 'c' && e.type === 'keydown') {
         const sel = terminal.getSelection()
         if (sel) {
-          navigator.clipboard.writeText(sel).catch(() => {})
+          navigator.clipboard.writeText(sel).then(() => terminal.focus()).catch(() => {})
           return false
         }
       }
@@ -166,15 +166,23 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
       }
     })
 
+    // Track the last non-empty selection so Shift+mouseup can read it after xterm finalizes it
+    let lastSel = ''
+    terminal.onSelectionChange(() => {
+      const s = terminal.getSelection()
+      if (s) lastSel = s
+    })
+
     // Shift+click: open URL or file path from current selection
-    const handleMouseDown = (e: MouseEvent): void => {
+    const handleMouseUp = (e: MouseEvent): void => {
       if (!e.shiftKey) return
-      const sel = terminal.getSelection().trim()
+      const sel = lastSel.trim()
       if (!sel) return
       const urlMatch = sel.match(URL_RE)
       if (urlMatch) {
         e.preventDefault()
         openExternal(urlMatch[0]).catch(() => {})
+        lastSel = ''
         return
       }
       const fileMatch = sel.match(FILE_PATH_RE)
@@ -182,6 +190,7 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
         e.preventDefault()
         const path = (fileMatch[1] ?? fileMatch[2] ?? '').trim()
         if (path) document.dispatchEvent(new CustomEvent('acc:open-file', { detail: { path } }))
+        lastSel = ''
       }
     }
 
@@ -197,7 +206,7 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
         const items: TerminalCtxItem[] = []
 
         if (sel) {
-          items.push({ label: 'Copy', action: () => navigator.clipboard.writeText(sel).catch(() => {}) })
+          items.push({ label: 'Copy', action: () => { navigator.clipboard.writeText(sel).catch(() => {}); terminal.focus() } })
           const urlMatch = sel.match(URL_RE)
           if (urlMatch) {
             const url = urlMatch[0]
@@ -206,16 +215,14 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
         }
 
         if (clipText) {
-          items.push({ label: 'Paste', action: () => {
-            navigator.clipboard.readText().then((t) => terminal.paste(t)).catch(() => {})
-          }})
+          items.push({ label: 'Paste', action: () => { terminal.paste(clipText); terminal.focus() } })
         }
 
         setCtxMenu({ x, y, items })
       })
     }
 
-    container.addEventListener('mousedown', handleMouseDown)
+    container.addEventListener('mouseup', handleMouseUp)
     container.addEventListener('contextmenu', handleContextMenu)
 
     const safeRefit = (): void => {
@@ -254,7 +261,7 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
       offData()
       observer.disconnect()
       visibilityObserver.disconnect()
-      container.removeEventListener('mousedown', handleMouseDown)
+      container.removeEventListener('mouseup', handleMouseUp)
       container.removeEventListener('contextmenu', handleContextMenu)
       terminal.dispose()
       unregisterTerminal(sessionId)
