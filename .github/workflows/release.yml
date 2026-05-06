@@ -16,7 +16,7 @@ jobs:
         run: |
           gh release create "${{ github.ref_name }}" \
             --draft \
-            --title "Shepherd ${{ github.ref_name }}" \
+            --title "Orbit ${{ github.ref_name }}" \
             --generate-notes \
             --repo "${{ github.repository }}"
         env:
@@ -32,6 +32,10 @@ jobs:
             args: --win
           - os: ubuntu-latest
             args: --linux
+          - os: macos-latest
+            args: --mac --arm64
+          - os: macos-13
+            args: --mac --x64
 
     runs-on: ${{ matrix.os }}
 
