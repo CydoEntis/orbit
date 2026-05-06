@@ -17,10 +17,11 @@ const ICON_MAP: Record<string, JSX.Element> = {
 interface Props {
   open: boolean
   onClose: () => void
+  onShowShortcuts: () => void
 }
 
-export function CommandPalette({ open, onClose }: Props): JSX.Element | null {
-  const { query, setQuery, selectedIdx, items } = useCommandPalette(open, onClose)
+export function CommandPalette({ open, onClose, onShowShortcuts }: Props): JSX.Element | null {
+  const { query, setQuery, selectedIdx, items } = useCommandPalette(open, onClose, onShowShortcuts)
 
   if (!open) return null
 

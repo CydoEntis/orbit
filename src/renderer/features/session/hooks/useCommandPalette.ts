@@ -12,7 +12,7 @@ export interface PaletteItem {
   action: () => void | Promise<void>
 }
 
-export function useCommandPalette(open: boolean, onClose: () => void): {
+export function useCommandPalette(open: boolean, onClose: () => void, onShowShortcuts?: () => void): {
   query: string
   setQuery: (q: string) => void
   selectedIdx: number
@@ -80,6 +80,7 @@ export function useCommandPalette(open: boolean, onClose: () => void): {
     { id: 'quick-note',    label: 'Quick Note',            description: hk.quickNote,    iconName: 'NotebookPen', action: () => { document.dispatchEvent(new CustomEvent('acc:quick-note'));   onClose() } },
     { id: 'close-tab',     label: 'Close Active Tab',      description: hk.closeSession, iconName: 'X',           action: () => { document.dispatchEvent(new CustomEvent('acc:close-tab'));   onClose() } },
     { id: 'detach-pane',   label: 'Detach Pane to Window', description: 'Ctrl+Shift+D', iconName: 'Maximize2',   action: () => { document.dispatchEvent(new CustomEvent('acc:detach-pane')); onClose() } },
+    { id: 'show-shortcuts',label: 'Keyboard Shortcuts',    description: '?',            iconName: 'Terminal',    action: () => { onShowShortcuts?.(); onClose() } },
   ].filter((a) => !q || a.label.toLowerCase().includes(q))
 
   actions.forEach((a) => items.push(a))
