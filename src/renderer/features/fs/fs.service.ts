@@ -53,3 +53,26 @@ export function openExternal(url: string): Promise<void> {
 export function readClipboard(): Promise<string> {
   return ipc.invoke(IPC.CLIPBOARD_READ_TEXT) as Promise<string>
 }
+
+export interface GitFileInfo { path: string; added: number; deleted: number }
+export interface GitReviewData { staged: GitFileInfo[]; unstaged: GitFileInfo[]; untracked: string[] }
+
+export async function getGitReview(projectRoot: string): Promise<GitReviewData> {
+  return ipc.invoke(IPC.FS_GIT_REVIEW, { projectRoot }) as Promise<GitReviewData>
+}
+
+export async function stageFile(projectRoot: string, filePath: string): Promise<void> {
+  await ipc.invoke(IPC.FS_GIT_STAGE, { projectRoot, filePath })
+}
+
+export async function unstageFile(projectRoot: string, filePath: string): Promise<void> {
+  await ipc.invoke(IPC.FS_GIT_UNSTAGE, { projectRoot, filePath })
+}
+
+export async function gitCommit(projectRoot: string, message: string): Promise<{ success: boolean; error?: string }> {
+  return ipc.invoke(IPC.FS_GIT_COMMIT, { projectRoot, message }) as Promise<{ success: boolean; error?: string }>
+}
+
+export async function gitPush(projectRoot: string): Promise<{ success: boolean; error?: string }> {
+  return ipc.invoke(IPC.FS_GIT_PUSH, { projectRoot }) as Promise<{ success: boolean; error?: string }>
+}

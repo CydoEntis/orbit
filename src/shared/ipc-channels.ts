@@ -63,6 +63,13 @@ export const IPC = {
   FS_TRASH: 'fs:trash',
   FS_FIND_FILES: 'fs:find-files',
 
+  // Git review: renderer → main (invoke)
+  FS_GIT_REVIEW: 'fs:git-review',
+  FS_GIT_STAGE: 'fs:git-stage',
+  FS_GIT_UNSTAGE: 'fs:git-unstage',
+  FS_GIT_COMMIT: 'fs:git-commit',
+  FS_GIT_PUSH: 'fs:git-push',
+
   // Notes: renderer → main (invoke)
   NOTES_LOAD: 'notes:load',
   NOTES_SAVE: 'notes:save',

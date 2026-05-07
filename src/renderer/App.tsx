@@ -17,6 +17,8 @@ import { CommandPalette } from './components/CommandPalette'
 import { FileSearchPalette } from './components/FileSearchPalette'
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal'
 import { FileViewer, VIEWER_THEMES } from './features/fs/components/FileViewer'
+import { AgentMonitorSidebar } from './features/workspace/components/AgentMonitorSidebar'
+import { AgentMonitorLayout } from './features/workspace/components/AgentMonitorLayout'
 import type { FilePaneTab } from './features/fs/hooks/useFilePane'
 import { createSession, killSession } from './features/session/session.service'
 import { detachTab, reattachTab } from './features/window/window.service'
@@ -114,6 +116,8 @@ export function App(): JSX.Element {
   const [refreshTick, setRefreshTick] = useState(0)
   const [fileViewTab, setFileViewTab] = useState<FilePaneTab>('content')
   const [showThemePicker, setShowThemePicker] = useState(false)
+  const [workspaceSessionId, setWorkspaceSessionId] = useState<string | null>(null)
+  const [workspaceProject, setWorkspaceProject] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(224)
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
@@ -310,6 +314,13 @@ export function App(): JSX.Element {
                 <NotepadPane activeNoteId={activeNoteId} onActivate={setActiveNoteId} onCreate={() => { const id = createNote(); setActiveNoteId(id) }} />
               ) : sidebarTab === 'presets' ? (
                 <PresetsPanel />
+              ) : sidebarTab === 'workspace' ? (
+                <AgentMonitorSidebar
+                  activeProject={workspaceProject}
+                  onProjectChange={setWorkspaceProject}
+                  activeSessionId={workspaceSessionId}
+                  onSelectSession={setWorkspaceSessionId}
+                />
               ) : (
                 <SessionDashboard
                   onFileClick={handleFileClick}
@@ -327,21 +338,23 @@ export function App(): JSX.Element {
           </>
         )}
 
-        {/* Sessions content — pane area */}
-        <div className={cn('flex-1 min-w-0 min-h-0', (isDashboardOpen && (sidebarTab === 'projects' || sidebarTab === 'notes' || sidebarTab === 'settings' || sidebarTab === 'workspace')) ? 'hidden' : 'flex flex-col')}>
-          <div className="flex-1 min-h-0 relative">
-            {tabOrder.length === 0 && <EmptyState />}
-            {tabOrder.map((tabId) => {
-              const tree = paneTree[tabId]
-              const isActive = activeSessionId === tabId
-              return (
-                <div key={tabId} className={`absolute inset-0 ${isActive ? 'flex' : 'hidden'}`}>
-                  {tree && <PaneTreeRenderer node={tree} tabId={tabId} onContextMenu={handleContextMenu} />}
-                </div>
-              )
-            })}
+        {/* Sessions content — pane area (unmounted entirely in workspace mode) */}
+        {sidebarTab !== 'workspace' && (
+          <div className={cn('flex-1 min-w-0 min-h-0', (isDashboardOpen && (sidebarTab === 'projects' || sidebarTab === 'notes' || sidebarTab === 'settings')) ? 'hidden' : 'flex flex-col')}>
+            <div className="flex-1 min-h-0 relative">
+              {tabOrder.length === 0 && <EmptyState />}
+              {tabOrder.map((tabId) => {
+                const tree = paneTree[tabId]
+                const isActive = activeSessionId === tabId
+                return (
+                  <div key={tabId} className={`absolute inset-0 ${isActive ? 'flex' : 'hidden'}`}>
+                    {tree && <PaneTreeRenderer node={tree} tabId={tabId} onContextMenu={handleContextMenu} />}
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Notes content — full editor */}
         {isDashboardOpen && sidebarTab === 'notes' && (
@@ -357,11 +370,9 @@ export function App(): JSX.Element {
           </div>
         )}
 
-        {/* Agent monitor — placeholder until built */}
+        {/* Agent monitor */}
         {isDashboardOpen && sidebarTab === 'workspace' && (
-          <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-zinc-700 text-sm">
-            Agent monitor coming soon
-          </div>
+          <AgentMonitorLayout sessionId={workspaceSessionId} projectRoot={workspaceProject} />
         )}
 
         {/* Projects content — tab bar + file viewer */}

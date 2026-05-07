@@ -159,6 +159,99 @@ export function registerFsIpc(): void {
     return results
   })
 
+  ipcMain.handle(IPC.FS_GIT_REVIEW, async (_, { projectRoot }: { projectRoot: string }) => {
+    interface GitFileInfo { path: string; added: number; deleted: number }
+    try {
+      const [statusResult, stagedResult, unstagedResult] = await Promise.allSettled([
+        execAsync('git status --porcelain -u', { cwd: projectRoot }),
+        execAsync('git diff --cached --numstat', { cwd: projectRoot }),
+        execAsync('git diff --numstat', { cwd: projectRoot }),
+      ])
+
+      const statusLines = statusResult.status === 'fulfilled'
+        ? statusResult.value.stdout.trim().split('\n').filter(Boolean)
+        : []
+      const stagedLines = stagedResult.status === 'fulfilled'
+        ? stagedResult.value.stdout.trim().split('\n').filter(Boolean)
+        : []
+      const unstagedLines = unstagedResult.status === 'fulfilled'
+        ? unstagedResult.value.stdout.trim().split('\n').filter(Boolean)
+        : []
+
+      // Parse numstat: "<added>\t<deleted>\t<path>"
+      function parseNumstat(lines: string[]): Map<string, { added: number; deleted: number }> {
+        const m = new Map<string, { added: number; deleted: number }>()
+        for (const line of lines) {
+          const parts = line.split('\t')
+          if (parts.length < 3) continue
+          const added = parseInt(parts[0], 10) || 0
+          const deleted = parseInt(parts[1], 10) || 0
+          const p = parts.slice(2).join('\t').trim()
+          m.set(p, { added, deleted })
+        }
+        return m
+      }
+
+      const stagedStats = parseNumstat(stagedLines)
+      const unstagedStats = parseNumstat(unstagedLines)
+
+      const staged: GitFileInfo[] = []
+      const unstaged: GitFileInfo[] = []
+      const untracked: string[] = []
+
+      for (const line of statusLines) {
+        const xy = line.slice(0, 2)
+        const filePath = line.slice(3).trim().replace(/^"(.+)"$/, '$1')
+        if (xy === '??') {
+          untracked.push(filePath)
+        } else {
+          const x = xy[0]
+          const y = xy[1]
+          if (x !== ' ' && x !== '?') {
+            const stats = stagedStats.get(filePath) ?? { added: 0, deleted: 0 }
+            staged.push({ path: filePath, ...stats })
+          }
+          if (y !== ' ' && y !== '?') {
+            const stats = unstagedStats.get(filePath) ?? { added: 0, deleted: 0 }
+            unstaged.push({ path: filePath, ...stats })
+          }
+        }
+      }
+
+      return { staged, unstaged, untracked }
+    } catch {
+      return { staged: [], unstaged: [], untracked: [] }
+    }
+  })
+
+  ipcMain.handle(IPC.FS_GIT_STAGE, async (_, { projectRoot, filePath }: { projectRoot: string; filePath: string }) => {
+    await execAsync(`git add -- "${filePath}"`, { cwd: projectRoot })
+  })
+
+  ipcMain.handle(IPC.FS_GIT_UNSTAGE, async (_, { projectRoot, filePath }: { projectRoot: string; filePath: string }) => {
+    await execAsync(`git restore --staged -- "${filePath}"`, { cwd: projectRoot })
+  })
+
+  ipcMain.handle(IPC.FS_GIT_COMMIT, async (_, { projectRoot, message }: { projectRoot: string; message: string }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await execAsync(`git commit -m "${message.replace(/"/g, '\\"')}"`, { cwd: projectRoot })
+      return { success: true }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return { success: false, error: msg }
+    }
+  })
+
+  ipcMain.handle(IPC.FS_GIT_PUSH, async (_, { projectRoot }: { projectRoot: string }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await execAsync('git push', { cwd: projectRoot })
+      return { success: true }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return { success: false, error: msg }
+    }
+  })
+
   ipcMain.handle(IPC.FS_GIT_DIFF_FILE, async (_, { projectRoot, filePath }: { projectRoot: string; filePath: string }): Promise<string | null> => {
     const rel = filePath.replace(/\\/g, '/')
     try {
