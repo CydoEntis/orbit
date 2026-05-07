@@ -15,9 +15,13 @@ export interface SettingsSlice {
   saveNote: (id: string, content: string) => Promise<void>
   deleteNote: (id: string) => Promise<void>
   addNote: (id: string) => void
+  addNoteFolder: (name: string, color?: string) => Promise<string>
+  deleteNoteFolder: (id: string) => Promise<void>
+  renameNoteFolder: (id: string, name: string, color?: string) => Promise<void>
+  setNoteFolder: (noteId: string, folderId: string | null) => Promise<void>
 }
 
-export const createSettingsSlice: StateCreator<RootStore, [['zustand/immer', never]], [], SettingsSlice> = (set) => ({
+export const createSettingsSlice: StateCreator<RootStore, [['zustand/immer', never]], [], SettingsSlice> = (set, get) => ({
   settings: DEFAULT_SETTINGS,
   settingsLoaded: false,
   notes: [],
@@ -58,5 +62,37 @@ export const createSettingsSlice: StateCreator<RootStore, [['zustand/immer', nev
     set((state) => {
       state.notes.unshift({ id, content: '', updatedAt: Date.now() })
     })
+  },
+
+  addNoteFolder: async (name: string, color?: string) => {
+    const id = crypto.randomUUID()
+    const current = get().settings.noteFolders ?? []
+    await get().updateSettings({ noteFolders: [...current, { id, name, color }] })
+    return id
+  },
+
+  deleteNoteFolder: async (folderId: string) => {
+    const { settings, updateSettings } = get()
+    const noteFolders = (settings.noteFolders ?? []).filter(f => f.id !== folderId)
+    const noteFolderMap = { ...(settings.noteFolderMap ?? {}) }
+    for (const noteId of Object.keys(noteFolderMap)) {
+      if (noteFolderMap[noteId] === folderId) delete noteFolderMap[noteId]
+    }
+    await updateSettings({ noteFolders, noteFolderMap })
+  },
+
+  renameNoteFolder: async (folderId: string, name: string, color?: string) => {
+    const current = get().settings.noteFolders ?? []
+    await get().updateSettings({ noteFolders: current.map(f => f.id === folderId ? { ...f, name, ...(color !== undefined ? { color } : {}) } : f) })
+  },
+
+  setNoteFolder: async (noteId: string, folderId: string | null) => {
+    const current = { ...(get().settings.noteFolderMap ?? {}) }
+    if (folderId === null) {
+      delete current[noteId]
+    } else {
+      current[noteId] = folderId
+    }
+    await get().updateSettings({ noteFolderMap: current })
   },
 })

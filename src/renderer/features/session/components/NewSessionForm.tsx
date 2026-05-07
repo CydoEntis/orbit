@@ -1,8 +1,8 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, FolderOpen, X } from 'lucide-react'
+import { Plus, FolderOpen, X, Zap } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import {
   Dialog,
@@ -41,9 +41,12 @@ export function NewSessionForm({ variant = 'icon' }: { variant?: 'icon' | 'sideb
   const [loading, setLoading] = useState(false)
   const [selectedPreset, setSelectedPreset] = useState<PresetId>('claude')
   const [selectedDir, setSelectedDir] = useState<string>('')
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('')
+  const [yoloMode, setYoloMode] = useState(false)
   const upsertSession = useStore((s) => s.upsertSession)
   const addTab = useStore((s) => s.addTab)
   const settings = useStore((s) => s.settings)
+  const groups = settings.sessionGroups ?? []
 
   useEffect(() => {
     const handler = (): void => setOpen(true)
@@ -51,17 +54,12 @@ export function NewSessionForm({ variant = 'icon' }: { variant?: 'icon' | 'sideb
     return () => document.removeEventListener('acc:new-session', handler)
   }, [])
 
-  const getDefaultDir = (_preset: PresetId): string => {
-    return settings.shellStartDir || ''
-  }
-
-  const handlePresetChange = (preset: PresetId): void => {
-    setSelectedPreset(preset)
-    setSelectedDir(getDefaultDir(preset))
-  }
-
   useEffect(() => {
-    if (open) setSelectedDir(getDefaultDir(selectedPreset))
+    if (open) {
+      setSelectedDir(settings.shellStartDir || '')
+      setSelectedGroupId('')
+      setYoloMode(false)
+    }
   }, [open])
 
   const pickDir = async (): Promise<void> => {
@@ -93,12 +91,16 @@ export function NewSessionForm({ variant = 'icon' }: { variant?: 'icon' | 'sideb
         agentCommand,
         cwd: selectedDir || undefined,
         cols: 80,
-        rows: 24
+        rows: 24,
+        groupId: selectedGroupId || undefined,
+        yoloMode: yoloMode || undefined
       })
       upsertSession(meta)
       addTab(meta.sessionId)
       reset()
       setSelectedPreset('claude')
+      setSelectedGroupId('')
+      setYoloMode(false)
       setOpen(false)
     } catch (err) {
       console.error('Failed to create session:', err)
@@ -107,10 +109,11 @@ export function NewSessionForm({ variant = 'icon' }: { variant?: 'icon' | 'sideb
     }
   }
 
-  const dirPlaceholder = selectedPreset === 'shell' ? 'Home directory' : 'Home directory'
   const shortDir = selectedDir
     ? selectedDir.replace(/\\/g, '/').split('/').slice(-2).join('/')
     : ''
+
+  const supportsYolo = selectedPreset === 'claude'
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -136,15 +139,8 @@ export function NewSessionForm({ variant = 'icon' }: { variant?: 'icon' | 'sideb
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 mt-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              placeholder="my-agent"
-              autoFocus
-              {...register('name')}
-            />
-            {errors.name && (
-              <p className="text-xs text-destructive">{errors.name.message}</p>
-            )}
+            <Input id="name" placeholder="my-agent" autoFocus {...register('name')} />
+            {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -154,7 +150,7 @@ export function NewSessionForm({ variant = 'icon' }: { variant?: 'icon' | 'sideb
                 <button
                   key={preset.id}
                   type="button"
-                  onClick={() => handlePresetChange(preset.id)}
+                  onClick={() => setSelectedPreset(preset.id)}
                   className={cn(
                     'px-3 py-1.5 rounded-md text-xs font-medium border transition-colors',
                     selectedPreset === preset.id
@@ -167,13 +163,28 @@ export function NewSessionForm({ variant = 'icon' }: { variant?: 'icon' | 'sideb
               ))}
             </div>
             {selectedPreset === 'custom' && (
-              <Input
-                placeholder="e.g. aider, continue, ollama"
-                {...register('customCommand')}
-                className="mt-1"
-              />
+              <Input placeholder="e.g. aider, continue, ollama" {...register('customCommand')} className="mt-1" />
             )}
           </div>
+
+          {supportsYolo && (
+            <button
+              type="button"
+              onClick={() => setYoloMode((v) => !v)}
+              className={cn(
+                'flex items-center gap-2 px-3 py-2 rounded-md text-xs border transition-colors text-left',
+                yoloMode
+                  ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
+                  : 'bg-transparent border-brand-panel text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+              )}
+            >
+              <Zap size={12} className="flex-shrink-0" />
+              <span>
+                <span className="font-medium">YOLO Mode</span>
+                <span className="ml-1 opacity-70">— skip permission prompts</span>
+              </span>
+            </button>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label>Working directory</Label>
@@ -182,38 +193,36 @@ export function NewSessionForm({ variant = 'icon' }: { variant?: 'icon' | 'sideb
                 {selectedDir ? (
                   <>
                     <span className="truncate flex-1" title={selectedDir}>…/{shortDir}</span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDir('')}
-                      className="flex-shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors"
-                    >
-                      <X size={11} />
-                    </button>
+                    <button type="button" onClick={() => setSelectedDir('')} className="flex-shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors"><X size={11} /></button>
                   </>
                 ) : (
-                  <span className="text-zinc-600">{dirPlaceholder}</span>
+                  <span className="text-zinc-600">Home directory</span>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={pickDir}
-                className="flex items-center justify-center px-3 rounded border border-brand-panel bg-brand-panel hover:bg-brand-panel/60 text-zinc-400 hover:text-zinc-200 transition-colors flex-shrink-0"
-                title="Browse"
-              >
+              <button type="button" onClick={pickDir} className="flex items-center justify-center px-3 rounded border border-brand-panel bg-brand-panel hover:bg-brand-panel/60 text-zinc-400 hover:text-zinc-200 transition-colors flex-shrink-0" title="Browse">
                 <FolderOpen size={14} />
               </button>
             </div>
           </div>
 
+          {groups.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label>Group <span className="text-zinc-600 font-normal">(optional)</span></Label>
+              <select
+                value={selectedGroupId}
+                onChange={(e) => setSelectedGroupId(e.target.value)}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs text-zinc-300 outline-none focus:border-brand-accent/50 transition-colors"
+              >
+                <option value="">None</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 mt-1">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setOpen(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={loading}>Cancel</Button>
             <Button type="submit" disabled={loading} className="bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 disabled:opacity-40">
               {loading ? 'Launching...' : 'Launch'}
             </Button>

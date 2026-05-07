@@ -16,17 +16,24 @@ import type {
   SessionExitPayload
 } from '@shared/ipc-types'
 
-function resolveShellSpawn(agentCommand?: string): { command: string; args: string[] } {
+function resolveShellSpawn(agentCommand?: string, yoloMode?: boolean): { command: string; args: string[] } {
   const defaultShell = getSettings().defaultShell
+  let cmd = agentCommand
+  if (cmd && yoloMode) {
+    // Append skip-permissions flag for supported agents
+    if (cmd === 'claude' || cmd.startsWith('claude ')) {
+      cmd = `${cmd} --dangerously-skip-permissions`
+    }
+  }
   if (process.platform === 'win32') {
     const shell = defaultShell || process.env.COMSPEC || 'C:\\Windows\\System32\\cmd.exe'
-    return agentCommand
-      ? { command: shell, args: ['/k', agentCommand] }
+    return cmd
+      ? { command: shell, args: ['/k', cmd] }
       : { command: shell, args: [] }
   }
   const shell = defaultShell || process.env.SHELL || '/bin/bash'
-  return agentCommand
-    ? { command: shell, args: ['-c', `${agentCommand}; exec ${shell}`] }
+  return cmd
+    ? { command: shell, args: ['-c', `${cmd}; exec ${shell}`] }
     : { command: shell, args: [] }
 }
 
@@ -36,7 +43,7 @@ export function createSession(
 ): SessionMeta {
   const sessionId = randomUUID()
   const cwd = payload.cwd || process.env.USERPROFILE || process.env.HOME || process.cwd()
-  const { command, args } = resolveShellSpawn(payload.agentCommand)
+  const { command, args } = resolveShellSpawn(payload.agentCommand, payload.yoloMode)
 
   const meta: SessionMeta = {
     sessionId,
@@ -51,7 +58,8 @@ export function createSession(
     pid: null,
     color: payload.color,
     agentStatus: 'idle',
-    groupId: payload.groupId
+    groupId: payload.groupId,
+    yoloMode: payload.yoloMode
   }
 
   const pty = new PtyProcess({
@@ -117,8 +125,8 @@ export function resizeSession(sessionId: string, cols: number, rows: number): vo
 
 export { listSessions }
 
-export function patchSession(sessionId: string, patch: { name?: string; color?: string; groupId?: string }): SessionMeta | undefined {
-  const updated = updateSessionMeta(sessionId, patch)
+export function patchSession(sessionId: string, patch: { name?: string; color?: string; groupId?: string; taskStatus?: string }): SessionMeta | undefined {
+  const updated = updateSessionMeta(sessionId, patch as any)
   if (updated) broadcastMetaUpdate(updated)
   return updated
 }

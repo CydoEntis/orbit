@@ -1,6 +1,8 @@
 ﻿import { useStore } from '../store/root.store'
 import logoUrl from '../assets/logo.png'
 
+declare const __APP_VERSION__: string
+
 function Key({ label }: { label: string }): JSX.Element {
   return (
     <kbd className="inline-flex items-center justify-center px-2 py-0.5 rounded bg-brand-panel border border-brand-panel/80 shadow-[0_2px_0_rgba(0,0,0,0.5)] font-mono text-[11px] text-zinc-300 leading-5 min-w-[1.75rem]">
@@ -34,7 +36,7 @@ export function EmptyState(): JSX.Element {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 select-none">
       <div className="flex flex-col items-center gap-1.5">
-        <img src={logoUrl} alt="Orbit" className="w-10 h-10 object-contain" />
+        <img src={logoUrl} alt="Orbit" className="w-24 h-24 object-contain" />
         <span className="text-base font-semibold text-zinc-200 tracking-widest uppercase">Orbit</span>
         <span className="text-[11px] text-zinc-600 tracking-wide">Mission control for AI agents</span>
       </div>
@@ -54,7 +56,7 @@ export function EmptyState(): JSX.Element {
         <KeybindEntry hotkey="Ctrl+Shift+D" label="Detach pane to window" />
       </div>
 
-      <p className="text-[10px] text-zinc-700 tracking-wider">v0.2.0</p>
+      <p className="text-[10px] text-zinc-700 tracking-wider">v{__APP_VERSION__}</p>
     </div>
   )
 }

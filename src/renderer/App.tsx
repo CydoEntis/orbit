@@ -50,17 +50,20 @@ function PaneTreeRenderer({
   const sessions = useStore((s) => s.sessions)
   const focusedSessionId = useStore((s) => s.focusedSessionId)
   const setFocusedSession = useStore((s) => s.setFocusedSession)
+  const isMainWindow = useStore((s) => s.isMainWindow)
+  const windowId = useStore((s) => s.windowId)
 
   if (node.type === 'leaf') {
     const sid = node.sessionId
     const splitPane = useStore.getState().splitPane
     const closePane = useStore.getState().closePane
     const detachPane = useStore.getState().detachPane
-    const windowId = useStore.getState().windowId
     const paneItems = [
       { label: 'Split Horizontal', action: async () => { const m = await createSession({ name: `${useStore.getState().sessions[sid]?.name ?? 'pane'} split`, cols: 80, rows: 24 }); splitPane(tabId, sid, 'horizontal', m) } },
       { label: 'Split Vertical', action: async () => { const m = await createSession({ name: `${useStore.getState().sessions[sid]?.name ?? 'pane'} split`, cols: 80, rows: 24 }); splitPane(tabId, sid, 'vertical', m) } },
-      { label: 'Detach to Window', action: async () => { detachPane(tabId, sid); if (windowId) await detachTab(sid, windowId) } },
+      isMainWindow
+        ? { label: 'Detach to Window', action: async () => { detachPane(tabId, sid); if (windowId) await detachTab(sid, windowId) } }
+        : { label: 'Reattach to Main', action: async () => { await reattachTab(sid, windowId ?? undefined) } },
       { label: 'Close Pane', action: async () => { await killSession(sid); closePane(tabId, sid) } },
     ]
     return (
@@ -132,6 +135,22 @@ export function App(): JSX.Element {
   const updateSettings = useStore((s) => s.updateSettings)
   const fileViewerTheme = useStore((s) => s.settings.fileViewerTheme)
   const commandPaletteHotkey = useStore((s) => s.settings.hotkeys.commandPalette)
+  const appTheme = useStore((s) => s.settings.theme)
+
+  useEffect(() => {
+    const html = document.documentElement
+    const applyDark = (): void => {
+      const isDark = appTheme === 'dark' || (appTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      html.classList.toggle('dark', isDark)
+    }
+    applyDark()
+    if (appTheme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)')
+      mq.addEventListener('change', applyDark)
+      return () => mq.removeEventListener('change', applyDark)
+    }
+    return undefined
+  }, [appTheme])
 
   const { openFiles, activeFilePath, setActiveFilePath, handleFileClick, handleCloseFile } = useFileTabs()
   const { handleSplitH, handleSplitV, handleDetach, handleReattach, handleClose } = usePaneActions(contextMenu)
@@ -157,10 +176,18 @@ export function App(): JSX.Element {
       setSidebarTab('notes')
     }, [createNote, isDashboardOpen]),
     onNewNoteDrawer: useCallback(() => {
+      if (noteDrawerOpen) { setNoteDrawerOpen(false); return }
+      const { notes } = useStore.getState()
+      if (notes.length > 0) {
+        const sorted = notes.slice().sort((a, b) => b.updatedAt - a.updatedAt)
+        setActiveNoteId(sorted[0].id)
+        setNoteDrawerOpen(true)
+        return
+      }
       const id = createNote()
       setActiveNoteId(id)
       setNoteDrawerOpen(true)
-    }, [createNote]),
+    }, [createNote, noteDrawerOpen]),
   })
 
   // Keep refs so the one-time effects below always see current values
@@ -197,6 +224,13 @@ export function App(): JSX.Element {
       setSidebarTab('notes')
     }
     const handleQuickNote = (): void => {
+      const { notes } = useStore.getState()
+      if (notes.length > 0) {
+        const sorted = notes.slice().sort((a, b) => b.updatedAt - a.updatedAt)
+        setActiveNoteId(sorted[0].id)
+        setNoteDrawerOpen(true)
+        return
+      }
       const id = createNote()
       setActiveNoteId(id)
       setNoteDrawerOpen(true)
@@ -263,7 +297,7 @@ export function App(): JSX.Element {
       : (activeFilePath ? activeFilePath.replace(/\\/g, '/') : '')
 
   return (
-    <div className="flex flex-col h-screen bg-brand-bg text-zinc-100 overflow-hidden dark">
+    <div className="flex flex-col h-screen bg-brand-bg text-zinc-100 overflow-hidden">
       <TitleBar title={titleBarTitle} subtitle={titleBarSubtitle} />
 
       <div className="flex flex-1 min-h-0">

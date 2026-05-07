@@ -16,9 +16,9 @@ export function registerWindowIpc(): void {
     return { newWindowId }
   })
 
-  ipcMain.handle(IPC.WINDOW_REATTACH_TAB, (event, payload: { sessionId: string }) => {
+  ipcMain.handle(IPC.WINDOW_REATTACH_TAB, (event, payload: { sessionId: string; fromWindowId?: string }) => {
     const win = BrowserWindow.fromWebContents(event.sender)
-    const fromWindowId = win ? String(win.id) : ''
+    const fromWindowId = win ? String(win.id) : (payload.fromWindowId ?? '')
     const success = reattachTab(payload.sessionId, fromWindowId)
     return { success }
   })

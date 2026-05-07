@@ -25,6 +25,7 @@ const HOTKEY_FIELDS: { key: keyof AppSettings['hotkeys']; label: string }[] = [
   { key: 'toggleDashboard',label: 'Toggle Dashboard' },
   { key: 'newNote',        label: 'New Note' },
   { key: 'quickNote',      label: 'Quick Note' },
+  { key: 'showShortcuts',  label: 'Show Shortcuts' },
 ]
 
 const MODIFIER_KEYS = new Set(['Control', 'Alt', 'Shift', 'Meta'])

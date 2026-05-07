@@ -4,7 +4,6 @@ import { SettingsPage } from './pages/SettingsPage'
 import './assets/globals.css'
 import '@xterm/xterm/css/xterm.css'
 
-document.documentElement.classList.add('dark')
 
 const root = ReactDOM.createRoot(document.getElementById('root')!)
 

@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, FolderOpen, FolderClosed, Plus, Terminal, Loader2, ExternalLink, Copy, ChevronDown, ChevronRight, Pencil, Check, Layers, Search } from 'lucide-react'
+import { X, FolderOpen, FolderClosed, Plus, Terminal, Loader2, ExternalLink, Copy, ChevronDown, ChevronRight, Pencil, Check, Layers, Search, Maximize2, PanelLeftOpen, LayoutGrid, CircleDot, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
+import { SESSION_COLORS } from '../session.service'
 import { Input } from '../../../components/ui/input'
 import { Label } from '../../../components/ui/label'
 import { createPortal } from 'react-dom'
@@ -17,7 +18,7 @@ import { toast } from 'sonner'
 import { cn } from '../../../lib/utils'
 import type { SessionMeta } from '@shared/ipc-types'
 
-const GROUP_COLORS = ['#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#06b6d4']
+const GROUP_COLORS = SESSION_COLORS
 
 interface ProjectCtxMenu { x: number; y: number; path: string }
 
@@ -80,17 +81,29 @@ function ProjectContextMenu({ x, y, path, onDismiss }: ProjectCtxMenu & { onDism
 
 // ─── Session group context menu ───────────────────────────────────────────────
 
+const TASK_STATUS_OPTIONS = [
+  { value: 'in-progress', label: 'In Progress', color: '#3b82f6' },
+  { value: 'review', label: 'Review', color: '#f97316' },
+  { value: 'done', label: 'Done', color: '#22c55e' },
+] as const
+
 interface SessionCtxMenuProps {
   x: number
   y: number
   meta: SessionMeta
   groups: { id: string; name: string; color?: string }[]
+  tabId: string | null
+  windowId: string | null
+  isMainWindow: boolean
   onAssign: (groupId: string | null) => void
   onNewGroup: () => void
+  onDetach: () => void
+  onReattach: () => void
+  onSetTaskStatus: (status: string | null) => void
   onDismiss: () => void
 }
 
-function SessionGroupMenu({ x, y, meta, groups, onAssign, onNewGroup, onDismiss }: SessionCtxMenuProps): JSX.Element {
+function SessionGroupMenu({ x, y, meta, groups, tabId, isMainWindow, onAssign, onNewGroup, onDetach, onReattach, onSetTaskStatus, onDismiss }: SessionCtxMenuProps): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -118,6 +131,20 @@ function SessionGroupMenu({ x, y, meta, groups, onAssign, onNewGroup, onDismiss 
       className="bg-brand-surface border border-brand-panel/60 rounded-md shadow-2xl py-1 w-48"
       onContextMenu={(e) => e.preventDefault()}
     >
+      {tabId && meta.status === 'running' && (
+        <>
+          {isMainWindow ? (
+            <button onClick={dismiss(onDetach)} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors text-left">
+              <Maximize2 size={11} className="flex-shrink-0" /> Detach to Window
+            </button>
+          ) : (
+            <button onClick={dismiss(onReattach)} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors text-left">
+              <PanelLeftOpen size={11} className="flex-shrink-0" /> Reattach to Main
+            </button>
+          )}
+          <div className="h-px bg-brand-panel my-1" />
+        </>
+      )}
       <p className="px-3 py-1 text-[10px] text-zinc-600 uppercase tracking-wider">Move to group</p>
       {meta.groupId && (
         <button
@@ -204,6 +231,11 @@ function CreateGroupModal({ pendingSessionId, onConfirm, onDismiss }: CreateGrou
               onClick={() => setColor(c)}
             />
           ))}
+          <label className="relative w-5 h-5 rounded-full cursor-pointer flex-shrink-0 border-2 border-dashed border-zinc-600 hover:border-zinc-400 transition-colors flex items-center justify-center overflow-hidden" title="Custom color">
+            <span className="absolute inset-0 rounded-full" style={{ backgroundColor: GROUP_COLORS.includes(color as any) ? 'transparent' : color }} />
+            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+            {GROUP_COLORS.includes(color as any) && <span className="text-zinc-600 text-[8px]">+</span>}
+          </label>
         </div>
         <div className="flex gap-2 justify-end">
           <button
@@ -226,6 +258,117 @@ function CreateGroupModal({ pendingSessionId, onConfirm, onDismiss }: CreateGrou
   )
 }
 
+// ─── Edit group modal ─────────────────────────────────────────────────────────
+
+function EditGroupModal({ group, onConfirm, onDismiss }: {
+  group: { name: string; color?: string }
+  onConfirm: (name: string, color: string) => void
+  onDismiss: () => void
+}): JSX.Element {
+  const [name, setName] = useState(group.name)
+  const [color, setColor] = useState(group.color ?? GROUP_COLORS[0])
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select() }, 0) }, [])
+
+  const confirm = (): void => { if (name.trim()) onConfirm(name.trim(), color) }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center" onMouseDown={(e) => { if (e.target === e.currentTarget) onDismiss() }}>
+      <div className="absolute inset-0 bg-black/50" />
+      <div className="relative bg-brand-surface border border-brand-panel/60 rounded-lg shadow-2xl w-72 p-5 flex flex-col gap-4">
+        <span className="text-sm font-semibold text-zinc-200">Edit Group</span>
+        <input
+          ref={inputRef}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') confirm(); if (e.key === 'Escape') onDismiss() }}
+          placeholder="Group name…"
+          className="w-full bg-brand-panel border border-brand-panel/60 rounded px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-brand-muted/50"
+        />
+        <div className="flex flex-wrap gap-2">
+          {GROUP_COLORS.map((c) => (
+            <button
+              key={c}
+              style={{ backgroundColor: c }}
+              onClick={() => setColor(c)}
+              className={cn('w-5 h-5 rounded-full flex-shrink-0 transition-all hover:scale-110', color === c ? 'ring-2 ring-offset-2 ring-offset-brand-surface ring-white/50 scale-110' : 'opacity-60')}
+            />
+          ))}
+          <label className="relative w-5 h-5 rounded-full cursor-pointer flex-shrink-0 border-2 border-dashed border-zinc-600 hover:border-zinc-400 transition-colors flex items-center justify-center overflow-hidden" title="Custom color">
+            <span className="absolute inset-0 rounded-full" style={{ backgroundColor: GROUP_COLORS.includes(color as any) ? 'transparent' : color }} />
+            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+            {GROUP_COLORS.includes(color as any) && <span className="text-zinc-600 text-[8px]">+</span>}
+          </label>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button onClick={onDismiss} className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors rounded hover:bg-brand-panel">
+            Cancel
+          </button>
+          <button
+            onClick={confirm}
+            disabled={!name.trim()}
+            className="px-3 py-1.5 text-xs bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+// ─── Group context menu ───────────────────────────────────────────────────────
+
+function GroupCtxMenu({ x, y, onEdit, onOpenAllInSplits, onDelete, onDismiss }: {
+  x: number; y: number
+  onEdit: () => void
+  onOpenAllInSplits: () => void
+  onDelete: () => void
+  onDismiss: () => void
+}): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent): void => {
+      if (ref.current?.contains(e.target as Node)) return
+      onDismiss()
+    }
+    document.addEventListener('mousedown', handler, { capture: true })
+    document.addEventListener('contextmenu', handler, { capture: true })
+    return () => {
+      document.removeEventListener('mousedown', handler, { capture: true })
+      document.removeEventListener('contextmenu', handler, { capture: true })
+    }
+  }, [onDismiss])
+
+  const ax = Math.min(x, window.innerWidth - 180)
+  const ay = Math.min(y, window.innerHeight - 140)
+  const dismiss = (fn: () => void) => () => { fn(); onDismiss() }
+
+  return createPortal(
+    <div
+      ref={ref}
+      style={{ position: 'fixed', top: ay, left: ax, zIndex: 9999 }}
+      className="bg-brand-surface border border-brand-panel/60 rounded-md shadow-2xl py-1 w-44"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <button onClick={dismiss(onOpenAllInSplits)} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors text-left">
+        <LayoutGrid size={11} className="flex-shrink-0" /> Open all in splits
+      </button>
+      <button onClick={dismiss(onEdit)} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors text-left">
+        <Pencil size={11} className="flex-shrink-0" /> Edit group
+      </button>
+      <div className="h-px bg-brand-panel/60 my-1" />
+      <button onClick={dismiss(onDelete)} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-red-400 hover:bg-brand-panel hover:text-red-300 transition-colors text-left">
+        <X size={11} className="flex-shrink-0" /> Delete group
+      </button>
+    </div>,
+    document.body
+  )
+}
+
 // ─── Project section (projects tab) ──────────────────────────────────────────
 
 interface ProjectSectionProps {
@@ -234,14 +377,21 @@ interface ProjectSectionProps {
   colorIndex: number
   refreshTick: number
   activeFilePath: string | null
+  defaultExpanded: boolean
+  expandedOverride?: boolean
   onFileClick: (path: string, xy: string | undefined) => void
   onNewSession: () => void
   onRemove: () => void
+  onExpand: () => void
 }
 
-function ProjectSection({ path, name, colorIndex, refreshTick, activeFilePath, onFileClick, onNewSession, onRemove }: ProjectSectionProps): JSX.Element {
-  const [expanded, setExpanded] = useState(true)
+function ProjectSection({ path, name, colorIndex, refreshTick, activeFilePath, defaultExpanded, expandedOverride, onFileClick, onNewSession, onRemove, onExpand }: ProjectSectionProps): JSX.Element {
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+
+  useEffect(() => {
+    if (expandedOverride !== undefined) setExpanded(expandedOverride)
+  }, [expandedOverride])
   const color = PROJECT_COLORS[colorIndex % PROJECT_COLORS.length]
   return (
     <div className="flex flex-col flex-shrink-0">
@@ -249,7 +399,7 @@ function ProjectSection({ path, name, colorIndex, refreshTick, activeFilePath, o
       <div
         className="group flex items-center gap-2 px-3 py-2.5 border-b border-brand-panel/60 cursor-pointer transition-all"
         style={{ background: `linear-gradient(to right, ${color}2e, transparent)` }}
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => { setExpanded((v) => { if (!v) onExpand(); return !v }) }}
         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }) }}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -283,8 +433,6 @@ function timeAgo(ts: number): string {
 
 // ─── Session row ─────────────────────────────────────────────────────────────
 
-import { SESSION_COLORS } from '../session.service'
-
 const MAX_NAME_LENGTH = 32
 
 interface SessionRowProps {
@@ -292,12 +440,18 @@ interface SessionRowProps {
   isFocused: boolean
   tabId: string | null | undefined
   groups: { id: string; name: string; color?: string }[]
+  openProjects?: string[]
   onActivate: () => void
   onClose: () => void
   onContextMenu: (e: React.MouseEvent) => void
 }
 
-function SessionRow({ meta, isFocused, tabId, onActivate, onClose, onContextMenu }: SessionRowProps): JSX.Element {
+function SessionRow({ meta, isFocused, tabId, openProjects, onActivate, onClose, onContextMenu }: SessionRowProps): JSX.Element {
+  const normalizedCwd = meta.cwd.replace(/\\/g, '/')
+  const linkedProject = openProjects?.find((p) => {
+    const np = p.replace(/\\/g, '/')
+    return normalizedCwd === np || normalizedCwd.startsWith(np + '/')
+  })
   const upsertSession = useStore((s) => s.upsertSession)
   const isRunning = meta.status === 'running'
   const agentStatus = meta.agentStatus ?? 'idle'
@@ -354,6 +508,20 @@ function SessionRow({ meta, isFocused, tabId, onActivate, onClose, onContextMenu
           <span className={cn('text-xs font-medium truncate flex-1 min-w-0', isFocused ? 'text-zinc-100' : 'text-zinc-500')}>
             {meta.name}
           </span>
+          {meta.taskStatus && (() => {
+            const opt = TASK_STATUS_OPTIONS.find(o => o.value === meta.taskStatus)
+            return opt ? (
+              <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium leading-none" style={{ color: opt.color, backgroundColor: `${opt.color}18`, border: `1px solid ${opt.color}40` }}>
+                {opt.label}
+              </span>
+            ) : null
+          })()}
+          {meta.yoloMode && (
+            <span className="flex-shrink-0 text-[9px] text-amber-400 font-medium">YOLO</span>
+          )}
+          {linkedProject && (
+            <span title={linkedProject}><FolderOpen size={10} className="flex-shrink-0 text-zinc-600" /></span>
+          )}
           <span className={cn('text-[10px] flex-shrink-0', isFocused ? 'text-zinc-400' : 'text-zinc-700')}>
             {timeAgo(meta.createdAt)}
           </span>
@@ -399,7 +567,7 @@ function SessionRow({ meta, isFocused, tabId, onActivate, onClose, onContextMenu
             </div>
             <div className="flex flex-col gap-2">
               <Label className="text-xs text-zinc-500">Color</Label>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap items-center">
                 {SESSION_COLORS.map((c) => (
                   <button
                     key={c}
@@ -408,6 +576,11 @@ function SessionRow({ meta, isFocused, tabId, onActivate, onClose, onContextMenu
                     className={cn('w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0', editColor === c && 'ring-2 ring-white ring-offset-2 ring-offset-brand-surface scale-110')}
                   />
                 ))}
+                <label className="relative w-7 h-7 rounded-full cursor-pointer flex-shrink-0 border-2 border-dashed border-zinc-600 hover:border-zinc-400 transition-colors flex items-center justify-center overflow-hidden" title="Custom color">
+                  <span className="absolute inset-0 rounded-full" style={{ backgroundColor: SESSION_COLORS.includes(editColor as any) ? 'transparent' : editColor }} />
+                  <input type="color" value={editColor} onChange={(e) => setEditColor(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  {SESSION_COLORS.includes(editColor as any) && <span className="text-zinc-600 text-[10px]">+</span>}
+                </label>
               </div>
             </div>
             <div className="flex gap-2 justify-end pt-1">
@@ -435,78 +608,57 @@ interface GroupSectionProps {
   sessions: SessionMeta[]
   collapsed: boolean
   onToggle: () => void
-  onRename: (name: string) => void
+  onEdit: (name: string, color: string) => void
   onDelete: () => void
+  onOpenAllInSplits: () => void
   focusedSessionId: string | null
   paneTree: Record<string, unknown>
+  openProjects: string[]
   onActivate: (tabId: string, sessionId: string) => void
   onClose: (sessionId: string) => void
   onSessionCtxMenu: (e: React.MouseEvent, meta: SessionMeta) => void
 }
 
-function GroupSection({ group, sessions, collapsed, onToggle, onRename, onDelete, focusedSessionId, paneTree, onActivate, onClose, onSessionCtxMenu }: GroupSectionProps): JSX.Element {
-  const [renaming, setRenaming] = useState(false)
-  const [nameVal, setNameVal] = useState(group.name)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const startRename = (): void => {
-    setNameVal(group.name)
-    setRenaming(true)
-    setTimeout(() => inputRef.current?.select(), 0)
-  }
-
-  const commitRename = (): void => {
-    const trimmed = nameVal.trim()
-    if (trimmed && trimmed !== group.name) onRename(trimmed)
-    setRenaming(false)
-  }
+function GroupSection({ group, sessions, collapsed, onToggle, onEdit, onDelete, onOpenAllInSplits, focusedSessionId, paneTree, openProjects, onActivate, onClose, onSessionCtxMenu }: GroupSectionProps): JSX.Element {
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
 
   return (
     <div className="flex flex-col">
-      <div className="group flex items-center gap-1.5 px-2 py-1.5 border-b border-brand-panel/40 hover:bg-brand-panel/10 transition-colors">
-        <button onClick={onToggle} className="text-zinc-600 hover:text-zinc-300 transition-colors flex-shrink-0">
+      <div
+        className="flex items-center gap-2 px-3 py-2 border-b border-brand-panel/60 transition-all cursor-pointer select-none"
+        style={{ background: `linear-gradient(to right, ${group.color ?? '#71717a'}2e, transparent)` }}
+        onClick={() => { if (collapsed) onToggle() }}
+        onDoubleClick={(e) => { e.stopPropagation(); setEditModalOpen(true) }}
+        onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }) }}
+      >
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle() }}
+          className="text-zinc-600 hover:text-zinc-300 transition-colors flex-shrink-0"
+        >
           {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
         </button>
-        <span
-          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-          style={{ backgroundColor: group.color ?? '#71717a' }}
-        />
-        {renaming ? (
-          <Input
-            ref={inputRef}
-            value={nameVal}
-            onChange={(e) => setNameVal(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename()
-              if (e.key === 'Escape') setRenaming(false)
-            }}
-            onBlur={commitRename}
-            className="flex-1 h-6 px-1 text-xs min-w-0"
-          />
-        ) : (
-          <span
-            className="text-xs font-semibold text-zinc-400 flex-1 truncate min-w-0"
-            onDoubleClick={startRename}
-          >
-            {group.name}
-          </span>
-        )}
-        <span className="text-[10px] text-zinc-700 flex-shrink-0">{sessions.length}</span>
-        <button
-          onClick={startRename}
-          className="opacity-0 group-hover:opacity-100 text-zinc-700 hover:text-zinc-400 transition-colors flex-shrink-0"
-          title="Rename group"
-        >
-          <Pencil size={10} />
-        </button>
-        <button
-          onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 text-zinc-700 hover:text-zinc-400 transition-colors flex-shrink-0"
-          title="Delete group"
-        >
-          <X size={11} />
-        </button>
+        <Layers size={13} className="flex-shrink-0" style={{ color: group.color ?? '#71717a' }} />
+        <span className="text-xs font-semibold text-zinc-200 flex-1 truncate min-w-0">{group.name}</span>
+        <span className="text-[10px] text-zinc-600">{sessions.length}</span>
       </div>
+      {editModalOpen && (
+        <EditGroupModal
+          group={group}
+          onConfirm={(name, color) => { onEdit(name, color); setEditModalOpen(false) }}
+          onDismiss={() => setEditModalOpen(false)}
+        />
+      )}
+      {ctxMenu && (
+        <GroupCtxMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onEdit={() => setEditModalOpen(true)}
+          onOpenAllInSplits={onOpenAllInSplits}
+          onDelete={onDelete}
+          onDismiss={() => setCtxMenu(null)}
+        />
+      )}
 
       {!collapsed && sessions.map((meta) => {
         const tabId = findTabForSession(paneTree as any, meta.sessionId)
@@ -517,6 +669,7 @@ function GroupSection({ group, sessions, collapsed, onToggle, onRename, onDelete
               isFocused={focusedSessionId === meta.sessionId}
               tabId={tabId}
               groups={[]}
+              openProjects={openProjects}
               onActivate={() => { if (tabId) onActivate(tabId, meta.sessionId) }}
               onClose={() => onClose(meta.sessionId)}
               onContextMenu={(e) => onSessionCtxMenu(e, meta)}
@@ -550,9 +703,14 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
   const settings = useStore((s) => s.settings)
 
   const { openProjects, refreshTicks, bumpRefresh, addProject, removeProject, closeSession } = useProjects()
+  const openGroupInSplits = useStore((s) => s.openGroupInSplits)
+  const windowId = useStore((s) => s.windowId)
+  const isMainWindow = useStore((s) => s.isMainWindow)
 
   const [sessionQuery, setSessionQuery] = useState('')
+  const [projectQuery, setProjectQuery] = useState('')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [projectExpandOverride, setProjectExpandOverride] = useState<boolean | undefined>(undefined)
   const [sessionCtxMenu, setSessionCtxMenu] = useState<{ x: number; y: number; meta: SessionMeta } | null>(null)
   const [createGroupModal, setCreateGroupModal] = useState<{ pendingSessionId?: string } | null>(null)
   const { requestClose: requestSessionClose, modal: closeModal } = useConfirmClose()
@@ -591,9 +749,28 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
     }
   }, [groups, updateSettings, upsertSession])
 
-  const handleRenameGroup = useCallback(async (groupId: string, name: string) => {
-    await updateSettings({ sessionGroups: groups.map((g) => g.id === groupId ? { ...g, name } : g) })
+  const handleEditGroup = useCallback(async (groupId: string, name: string, color: string) => {
+    await updateSettings({ sessionGroups: groups.map((g) => g.id === groupId ? { ...g, name, color } : g) })
   }, [groups, updateSettings])
+
+  const handleSetTaskStatus = useCallback(async (sessionId: string, taskStatus: string | null) => {
+    const updated = await patchSession({ sessionId, taskStatus })
+    upsertSession(updated)
+  }, [upsertSession])
+
+  const handleDetachSession = useCallback(async (meta: SessionMeta) => {
+    const tabId = findTabForSession(paneTree, meta.sessionId)
+    if (!tabId || !windowId) return
+    const { detachPane } = useStore.getState()
+    detachPane(tabId, meta.sessionId)
+    const { detachTab } = await import('../../../features/window/window.service')
+    await detachTab(meta.sessionId, windowId)
+  }, [paneTree, windowId])
+
+  const handleReattachSession = useCallback(async (meta: SessionMeta) => {
+    const { reattachTab } = await import('../../../features/window/window.service')
+    await reattachTab(meta.sessionId, windowId ?? undefined)
+  }, [windowId])
 
   const handleDeleteGroup = useCallback(async (groupId: string) => {
     const inGroup = allSessions.filter((m) => m.groupId === groupId)
@@ -616,6 +793,24 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
               placeholder="Filter sessions…"
               className="flex-1 bg-transparent text-xs text-zinc-300 placeholder:text-zinc-600 outline-none"
             />
+            {groups.length > 0 && (
+              <>
+                <button
+                  onClick={() => setCollapsedGroups(new Set())}
+                  className="text-zinc-600 hover:text-zinc-400 transition-colors flex-shrink-0"
+                  title="Expand all groups"
+                >
+                  <ChevronsUpDown size={12} />
+                </button>
+                <button
+                  onClick={() => setCollapsedGroups(new Set(groups.map(g => g.id)))}
+                  className="text-zinc-600 hover:text-zinc-400 transition-colors flex-shrink-0"
+                  title="Collapse all groups"
+                >
+                  <ChevronsDownUp size={12} />
+                </button>
+              </>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto py-1">
             {/* Group sections */}
@@ -634,10 +829,12 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
                     else next.add(group.id)
                     return next
                   })}
-                  onRename={(name) => handleRenameGroup(group.id, name)}
+                  onEdit={(name, color) => handleEditGroup(group.id, name, color)}
                   onDelete={() => handleDeleteGroup(group.id)}
+                  onOpenAllInSplits={() => openGroupInSplits(groupSessions.map(m => m.sessionId))}
                   focusedSessionId={focusedSessionId}
                   paneTree={paneTree}
+                  openProjects={openProjects}
                   onActivate={(tabId, sessionId) => { setActiveSession(tabId); setFocusedSession(sessionId) }}
                   onClose={(sessionId) => requestSessionClose(() => closeSession(sessionId))}
                   onSessionCtxMenu={(e, meta) => setSessionCtxMenu({ x: e.clientX, y: e.clientY, meta })}
@@ -662,6 +859,7 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
                       isFocused={focusedSessionId === meta.sessionId}
                       tabId={tabId}
                       groups={groups}
+                      openProjects={openProjects}
                       onActivate={() => { if (tabId) { setActiveSession(tabId); setFocusedSession(meta.sessionId) } }}
                       onClose={() => requestSessionClose(() => closeSession(meta.sessionId))}
                       onContextMenu={(e) => setSessionCtxMenu({ x: e.clientX, y: e.clientY, meta })}
@@ -695,6 +893,33 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
       {/* Projects tab */}
       {activeTab === 'projects' && (
         <div className="flex flex-col flex-1 min-h-0">
+          <div className="flex items-center gap-2 px-3 py-1.5 border-b border-brand-panel/40 flex-shrink-0">
+            <Search size={11} className="text-zinc-600 flex-shrink-0" />
+            <input
+              value={projectQuery}
+              onChange={(e) => setProjectQuery(e.target.value)}
+              placeholder="Filter projects…"
+              className="flex-1 bg-transparent text-xs text-zinc-300 placeholder:text-zinc-600 outline-none"
+            />
+            {openProjects.length > 0 && (
+              <>
+                <button
+                  onClick={() => setProjectExpandOverride(true)}
+                  className="text-zinc-600 hover:text-zinc-400 transition-colors flex-shrink-0"
+                  title="Expand all projects"
+                >
+                  <ChevronsUpDown size={12} />
+                </button>
+                <button
+                  onClick={() => setProjectExpandOverride(false)}
+                  className="text-zinc-600 hover:text-zinc-400 transition-colors flex-shrink-0"
+                  title="Collapse all projects"
+                >
+                  <ChevronsDownUp size={12} />
+                </button>
+              </>
+            )}
+          </div>
           <div className="flex-1 overflow-y-auto min-h-0">
             {openProjects.length === 0 && (
               <div className="flex flex-col items-center gap-2 px-4 py-8">
@@ -702,8 +927,9 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
                 <p className="text-xs text-zinc-500 font-medium">No projects open</p>
               </div>
             )}
-            {openProjects.map((p, idx) => {
+            {openProjects.filter(p => !projectQuery || p.toLowerCase().includes(projectQuery.toLowerCase())).map((p, idx) => {
               const name = p.split('/').filter(Boolean).pop() ?? p
+              const lastActive = settings.lastActiveProject
               return (
                 <ProjectSection
                   key={p}
@@ -712,6 +938,9 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
                   colorIndex={idx}
                   refreshTick={refreshTicks[p] ?? 0}
                   activeFilePath={activeFilePath}
+                  defaultExpanded={lastActive ? p === lastActive : idx === 0}
+                  expandedOverride={projectExpandOverride}
+                  onExpand={() => { setProjectExpandOverride(undefined); updateSettings({ lastActiveProject: p }) }}
                   onFileClick={onFileClick}
                   onNewSession={async () => {
                     try {
@@ -745,8 +974,14 @@ export function SessionDashboard({ onFileClick, activeTab, activeFilePath, exter
           y={sessionCtxMenu.y}
           meta={sessionCtxMenu.meta}
           groups={groups}
+          tabId={findTabForSession(paneTree, sessionCtxMenu.meta.sessionId)}
+          windowId={windowId}
+          isMainWindow={isMainWindow}
           onAssign={(groupId) => { handleAssignGroup(sessionCtxMenu.meta.sessionId, groupId); setSessionCtxMenu(null) }}
           onNewGroup={() => { setSessionCtxMenu(null); setCreateGroupModal({ pendingSessionId: sessionCtxMenu.meta.sessionId }) }}
+          onDetach={() => { handleDetachSession(sessionCtxMenu.meta); setSessionCtxMenu(null) }}
+          onReattach={() => { handleReattachSession(sessionCtxMenu.meta); setSessionCtxMenu(null) }}
+          onSetTaskStatus={(status) => { handleSetTaskStatus(sessionCtxMenu.meta.sessionId, status); setSessionCtxMenu(null) }}
           onDismiss={() => setSessionCtxMenu(null)}
         />
       )}

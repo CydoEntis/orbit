@@ -1,4 +1,4 @@
-import { BrowserWindow, shell, app } from 'electron'
+import { BrowserWindow, shell, app, Menu } from 'electron'
 import { join } from 'path'
 
 // Set Windows taskbar app ID so the icon shows correctly
@@ -20,6 +20,7 @@ function getWindowId(win: BrowserWindow): string {
 }
 
 export function createWindow(initialSessionIds: string[] = []): BrowserWindow {
+  Menu.setApplicationMenu(null)
   windowCounter++
 
   const iconPath = app.isPackaged

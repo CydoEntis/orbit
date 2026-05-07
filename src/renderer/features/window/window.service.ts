@@ -11,8 +11,8 @@ export async function detachTab(sessionId: string, fromWindowId: string): Promis
   return ipc.invoke(IPC.WINDOW_DETACH_TAB, { sessionId, fromWindowId }) as Promise<DetachTabResponse>
 }
 
-export async function reattachTab(sessionId: string): Promise<{ success: boolean }> {
-  return ipc.invoke(IPC.WINDOW_REATTACH_TAB, { sessionId }) as Promise<{ success: boolean }>
+export async function reattachTab(sessionId: string, fromWindowId?: string): Promise<{ success: boolean }> {
+  return ipc.invoke(IPC.WINDOW_REATTACH_TAB, { sessionId, fromWindowId }) as Promise<{ success: boolean }>
 }
 
 export function sendWindowControl(action: WindowControlAction): void {

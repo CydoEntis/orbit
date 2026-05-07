@@ -8,13 +8,22 @@ function settingsPath(): string {
   return join(app.getPath('userData'), 'settings.json')
 }
 
+const STALE_SHOW_SHORTCUTS = new Set(['Shift+?', 'Alt+/', '?'])
+
 export function getSettings(): AppSettings {
   const path = settingsPath()
   if (!existsSync(path)) return DEFAULT_SETTINGS
   try {
     const raw = JSON.parse(readFileSync(path, 'utf-8'))
     const parsed = AppSettingsSchema.safeParse(raw)
-    return parsed.success ? parsed.data : DEFAULT_SETTINGS
+    if (!parsed.success) return DEFAULT_SETTINGS
+    const data = parsed.data
+    if (STALE_SHOW_SHORTCUTS.has(data.hotkeys.showShortcuts)) {
+      data.hotkeys = { ...data.hotkeys, showShortcuts: 'Ctrl+Shift+K' }
+      const filePath = settingsPath()
+      try { writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8') } catch { /* non-fatal */ }
+    }
+    return data
   } catch {
     return DEFAULT_SETTINGS
   }

@@ -9,7 +9,8 @@ export const CreateSessionPayloadSchema = z.object({
   cols: z.number().int().positive().default(80),
   rows: z.number().int().positive().default(24),
   color: z.string().optional(),
-  groupId: z.string().optional()
+  groupId: z.string().optional(),
+  yoloMode: z.boolean().optional()
 })
 export type CreateSessionPayload = z.infer<typeof CreateSessionPayloadSchema>
 
@@ -18,6 +19,9 @@ export type SessionStatus = z.infer<typeof SessionStatusSchema>
 
 export const AgentStatusSchema = z.enum(['idle', 'running', 'waiting-input'])
 export type AgentStatus = z.infer<typeof AgentStatusSchema>
+
+export const TaskStatusSchema = z.enum(['in-progress', 'review', 'done'])
+export type TaskStatus = z.infer<typeof TaskStatusSchema>
 
 export const SessionMetaSchema = z.object({
   sessionId: z.string().uuid(),
@@ -33,7 +37,9 @@ export const SessionMetaSchema = z.object({
   color: z.string().optional(),
   agentStatus: AgentStatusSchema.default('idle'),
   conversationId: z.string().optional(),
-  groupId: z.string().optional()
+  groupId: z.string().optional(),
+  taskStatus: TaskStatusSchema.optional(),
+  yoloMode: z.boolean().optional()
 })
 export type SessionMeta = z.infer<typeof SessionMetaSchema>
 
@@ -123,7 +129,7 @@ export const HotkeysSchema = z.object({
   newNote: z.string().default('Ctrl+N'),
   quickNote: z.string().default('Ctrl+Shift+N'),
   fileSearch: z.string().default('Ctrl+Shift+P'),
-  showShortcuts: z.string().default('?'),
+  showShortcuts: z.string().default('Ctrl+Shift+K'),
 })
 export type Hotkeys = z.infer<typeof HotkeysSchema>
 
@@ -137,6 +143,9 @@ export interface GitStatusEntry {
   xy: string
   path: string
 }
+
+export const NoteFolderSchema = z.object({ id: z.string(), name: z.string(), color: z.string().optional() })
+export type NoteFolder = z.infer<typeof NoteFolderSchema>
 
 export const AppSettingsSchema = z.object({
   projectRoot: z.string().default(''),
@@ -155,7 +164,10 @@ export const AppSettingsSchema = z.object({
   confirmCloseSession: z.boolean().default(true),
   resumeOnStartup: z.boolean().default(false),
   notesDirectory: z.string().default(''),
-  notes: z.array(z.object({ id: z.string(), content: z.string().default(''), updatedAt: z.number().default(0) })).default([])
+  notes: z.array(z.object({ id: z.string(), content: z.string().default(''), updatedAt: z.number().default(0) })).default([]),
+  noteFolders: z.array(NoteFolderSchema).default([]),
+  noteFolderMap: z.record(z.string()).default({}),
+  lastActiveProject: z.string().default('')
 })
 
 export const NoteSchema = z.object({ id: z.string(), content: z.string().default(''), updatedAt: z.number().default(0) })
