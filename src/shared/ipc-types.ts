@@ -10,7 +10,11 @@ export const CreateSessionPayloadSchema = z.object({
   rows: z.number().int().positive().default(24),
   color: z.string().optional(),
   groupId: z.string().optional(),
-  yoloMode: z.boolean().optional()
+  yoloMode: z.boolean().optional(),
+  worktreePath: z.string().optional(),
+  worktreeBranch: z.string().optional(),
+  worktreeBaseBranch: z.string().optional(),
+  projectRoot: z.string().optional()
 })
 export type CreateSessionPayload = z.infer<typeof CreateSessionPayloadSchema>
 
@@ -159,7 +163,7 @@ export const AppSettingsSchema = z.object({
   sessionGroups: z.array(z.object({ id: z.string(), name: z.string(), color: z.string().optional() })).default([]),
   fontSize: z.number().int().min(8).max(32).default(14),
   fontFamily: z.string().default("'Cascadia Code', 'JetBrains Mono', monospace"),
-  theme: z.enum(['system', 'light', 'dark', 'space']).default('dark'),
+  theme: z.enum(['system', 'light', 'dark', 'space', 'nebula', 'solar', 'aurora']).default('dark'),
   fileViewerTheme: z.string().default('vitesse-dark'),
   scrollbackLines: z.number().int().min(100).max(100000).default(10000),
   presets: z.array(PresetSchema).default([]),

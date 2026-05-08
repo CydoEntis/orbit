@@ -133,6 +133,42 @@ const MONOKAI_TERMINAL_THEME = {
   white: '#f8f8f2', brightWhite: '#f9f8f5',
 }
 
+const NEBULA_TERMINAL_THEME = {
+  background: '#080514', foreground: '#c8f0ff', cursor: '#64dcff',
+  black: '#0c0920', brightBlack: '#1a1240',
+  red: '#ff6b8a', brightRed: '#ff9aad',
+  green: '#64ffda', brightGreen: '#96ffe8',
+  yellow: '#ffe07a', brightYellow: '#fff0a0',
+  blue: '#64dcff', brightBlue: '#96e8ff',
+  magenta: '#c084fc', brightMagenta: '#d8b4fe',
+  cyan: '#64dcff', brightCyan: '#96e8ff',
+  white: '#c8f0ff', brightWhite: '#e8f8ff',
+}
+
+const SOLAR_TERMINAL_THEME = {
+  background: '#0c0804', foreground: '#fff0d0', cursor: '#ffb900',
+  black: '#1a1008', brightBlack: '#3d2a10',
+  red: '#ff6b47', brightRed: '#ff8c6a',
+  green: '#a8e063', brightGreen: '#c4f07d',
+  yellow: '#ffb900', brightYellow: '#ffd040',
+  blue: '#63c0f5', brightBlue: '#8dd4ff',
+  magenta: '#d9a0ff', brightMagenta: '#ebb8ff',
+  cyan: '#4ecdc4', brightCyan: '#7ae0d8',
+  white: '#fff0d0', brightWhite: '#ffffff',
+}
+
+const AURORA_TERMINAL_THEME = {
+  background: '#040c0e', foreground: '#d0fff0', cursor: '#00e6a0',
+  black: '#061a1e', brightBlack: '#0a2830',
+  red: '#ff6b8a', brightRed: '#ff9aad',
+  green: '#00e6a0', brightGreen: '#40ffc0',
+  yellow: '#ffe566', brightYellow: '#fff0a0',
+  blue: '#60c8ff', brightBlue: '#90daff',
+  magenta: '#c084ff', brightMagenta: '#d8b0ff',
+  cyan: '#00e6a0', brightCyan: '#40ffc0',
+  white: '#d0fff0', brightWhite: '#f0fff8',
+}
+
 const NAMED_THEMES: Record<string, typeof DARK_TERMINAL_THEME> = {
   dracula: DRACULA_TERMINAL_THEME,
   'one-dark': ONE_DARK_TERMINAL_THEME,
@@ -150,7 +186,10 @@ export const TERMINAL_THEME_LIST: { id: string; label: string }[] = [
 ]
 
 function resolveTerminalTheme(appTheme: string): typeof DARK_TERMINAL_THEME {
-  if (appTheme === 'space') return SPACE_TERMINAL_THEME
+  if (appTheme === 'space')  return SPACE_TERMINAL_THEME
+  if (appTheme === 'nebula') return NEBULA_TERMINAL_THEME
+  if (appTheme === 'solar')  return SOLAR_TERMINAL_THEME
+  if (appTheme === 'aurora') return AURORA_TERMINAL_THEME
   const isDark = appTheme === 'dark' || (appTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   return isDark ? DARK_TERMINAL_THEME : LIGHT_TERMINAL_THEME
 }
@@ -230,11 +269,13 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
     terminal.loadAddon(searchAddon)
     terminal.open(container)
     searchAddonRef.current = searchAddon
-    // Double-RAF: first frame starts layout, second frame has real dimensions
+    // Double-RAF: first frame starts layout, second frame has real dimensions.
+    // Fallback at 200ms for split panes where panel layout settles after mount.
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      fitAddon.fit()
+      try { fitAddon.fit() } catch {}
       terminal.focus()
     }))
+    const fallbackFitTimer = setTimeout(() => { try { fitAddon.fit() } catch {} }, 200)
 
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
@@ -421,6 +462,7 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
 
     return () => {
       cancelAnimationFrame(rafId)
+      clearTimeout(fallbackFitTimer)
       offData()
       observer.disconnect()
       visibilityObserver.disconnect()
