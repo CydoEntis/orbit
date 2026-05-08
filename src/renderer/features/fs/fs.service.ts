@@ -65,8 +65,26 @@ export async function stageFile(projectRoot: string, filePath: string): Promise<
   await ipc.invoke(IPC.FS_GIT_STAGE, { projectRoot, filePath })
 }
 
+export async function stageAll(projectRoot: string): Promise<void> {
+  await ipc.invoke(IPC.FS_GIT_STAGE_ALL, { projectRoot })
+}
+
 export async function unstageFile(projectRoot: string, filePath: string): Promise<void> {
   await ipc.invoke(IPC.FS_GIT_UNSTAGE, { projectRoot, filePath })
+}
+
+export async function unstageAll(projectRoot: string): Promise<void> {
+  await ipc.invoke(IPC.FS_GIT_UNSTAGE_ALL, { projectRoot })
+}
+
+export async function getGitBranchInfo(projectRoot: string): Promise<{ current: string }> {
+  return ipc.invoke(IPC.FS_GIT_BRANCH_INFO, { projectRoot }) as Promise<{ current: string }>
+}
+
+export interface GitCommit { hash: string; subject: string; relativeDate: string }
+
+export async function getGitLog(projectRoot: string, baseBranch?: string, limit?: number): Promise<GitCommit[]> {
+  return ipc.invoke(IPC.FS_GIT_LOG, { projectRoot, baseBranch, limit }) as Promise<GitCommit[]>
 }
 
 export async function gitCommit(projectRoot: string, message: string): Promise<{ success: boolean; error?: string }> {
@@ -75,4 +93,19 @@ export async function gitCommit(projectRoot: string, message: string): Promise<{
 
 export async function gitPush(projectRoot: string): Promise<{ success: boolean; error?: string }> {
   return ipc.invoke(IPC.FS_GIT_PUSH, { projectRoot }) as Promise<{ success: boolean; error?: string }>
+}
+
+export interface WorktreeResult { worktreePath: string; branchName: string; baseBranch: string }
+export interface WorktreeStats { added: number; deleted: number; commits: number }
+
+export async function createWorktree(projectRoot: string, branchName: string): Promise<WorktreeResult> {
+  return ipc.invoke(IPC.FS_GIT_WORKTREE_CREATE, { projectRoot, branchName }) as Promise<WorktreeResult>
+}
+
+export async function removeWorktree(projectRoot: string, worktreePath: string): Promise<{ success: boolean; error?: string }> {
+  return ipc.invoke(IPC.FS_GIT_WORKTREE_REMOVE, { projectRoot, worktreePath }) as Promise<{ success: boolean; error?: string }>
+}
+
+export async function getWorktreeStats(worktreePath: string, baseBranch: string): Promise<WorktreeStats> {
+  return ipc.invoke(IPC.FS_GIT_WORKTREE_STATS, { worktreePath, baseBranch }) as Promise<WorktreeStats>
 }

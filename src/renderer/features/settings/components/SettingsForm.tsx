@@ -22,10 +22,9 @@ const HOTKEY_FIELDS: { key: keyof AppSettings['hotkeys']; label: string }[] = [
   { key: 'closeSession',   label: 'Close Session' },
   { key: 'openProject',    label: 'Open Project' },
   { key: 'commandPalette', label: 'Command Palette' },
-  { key: 'toggleDashboard',label: 'Toggle Dashboard' },
-  { key: 'newNote',        label: 'New Note' },
-  { key: 'quickNote',      label: 'Quick Note' },
+  { key: 'quickNote',      label: 'Toggle Notes' },
   { key: 'showShortcuts',  label: 'Show Shortcuts' },
+  { key: 'reviewChanges',  label: 'Review Changes' },
 ]
 
 const MODIFIER_KEYS = new Set(['Control', 'Alt', 'Shift', 'Meta'])
@@ -139,9 +138,10 @@ export function SettingsForm({ onClose }: Props): JSX.Element {
     values: settings
   })
 
-  const defaultShell   = watch('defaultShell') ?? ''
-  const shellStartDir  = watch('shellStartDir') ?? ''
-  const notesDirectory = watch('notesDirectory') ?? ''
+  const defaultShell      = watch('defaultShell') ?? ''
+  const shellStartDir     = watch('shellStartDir') ?? ''
+  const notesDirectory    = watch('notesDirectory') ?? ''
+  const defaultSessionDir = watch('defaultSessionDir') ?? ''
   const confirmClose      = watch('confirmCloseSession')
   const resumeOnStartup   = watch('resumeOnStartup')
   const hotkeys           = watch('hotkeys')
@@ -159,6 +159,11 @@ export function SettingsForm({ onClose }: Props): JSX.Element {
   const pickNotesDir = async (): Promise<void> => {
     const picked = await window.ipc.invoke(IPC.DIALOG_PICK_FOLDER) as string | null
     if (picked !== null) setValue('notesDirectory', picked)
+  }
+
+  const pickSessionDir = async (): Promise<void> => {
+    const picked = await window.ipc.invoke(IPC.DIALOG_PICK_FOLDER) as string | null
+    if (picked !== null) setValue('defaultSessionDir', picked)
   }
 
   const onSubmit = async (data: AppSettings): Promise<void> => {
@@ -205,14 +210,9 @@ export function SettingsForm({ onClose }: Props): JSX.Element {
                 placeholder="Home directory"
                 className="flex-1 text-xs text-zinc-400 cursor-default"
               />
-              <button
-                type="button"
-                onClick={pickShellStartDir}
-                className="flex items-center justify-center px-3 rounded border border-brand-panel bg-brand-panel hover:bg-brand-panel/60 text-zinc-400 hover:text-foreground transition-colors flex-shrink-0"
-                title="Browse"
-              >
+              <Button type="button" variant="outline" size="icon" onClick={pickShellStartDir} title="Browse" className="flex-shrink-0 h-9 w-9">
                 <FolderOpen size={14} />
-              </button>
+              </Button>
             </div>
           </div>
         </section>
@@ -263,6 +263,20 @@ export function SettingsForm({ onClose }: Props): JSX.Element {
 
         <section className="flex flex-col gap-3">
           <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Sessions</p>
+          <div className="flex flex-col gap-1.5">
+            <Label>Default session directory</Label>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={defaultSessionDir}
+                placeholder="~/Orbit"
+                className="flex-1 text-xs text-zinc-400 cursor-default"
+              />
+              <Button type="button" variant="outline" size="icon" onClick={pickSessionDir} title="Browse" className="flex-shrink-0 h-9 w-9">
+                <FolderOpen size={14} />
+              </Button>
+            </div>
+          </div>
           <div className="flex items-center justify-between">
             <Label htmlFor="confirm-close" className="text-sm text-foreground font-normal cursor-pointer">
               Confirm before closing a session

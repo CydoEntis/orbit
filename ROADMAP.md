@@ -21,20 +21,13 @@
 ### Easy
 | Bug | Notes |
 |-----|-------|
-| Cannot close note tabs via X inside the tab | Missing close handler on note tab UI |
-| Right-clicking a session tab should open a context menu with Close | Add right-click handler to session tabs |
-| Right-click paste still inserts content twice | Duplicate paste event — likely mousedown + contextmenu both firing |
 | Need physical buttons for all keyboard shortcuts | Toolbar/button equivalents for keyboard-illiterate users |
 
 ### Medium
 | Bug | Notes |
 |-----|-------|
-| Copy/paste (Ctrl+C / Ctrl+V) not working in notes | Clipboard events being swallowed by editor or terminal focus |
-| Shift+Enter should insert a newline, not send message | Input keydown handler needs to intercept Shift+Enter before submit |
-| Session tabs don't update working directory path on `cd` | Need to track cwd changes from shell output (OSC 7 or prompt hook) |
-| Split terminals should inherit the cwd of the parent terminal | Pass parent cwd when spawning a split session |
-| Close all sessions / close all above or below focused session | Add bulk-close options to session tab context menu |
-| Split terminals and parent should auto-group together | Create/assign a group automatically when a split is created |
+| Shift+Enter should insert a newline, not send message | Requires agent message input bar (On Hold) — nothing to intercept yet |
+| Session tabs don't update working directory path on `cd` | OSC 7 + shell integration injection is in place for bash/zsh/fish/pwsh. CMD has a prompt-parsing fallback but it's fragile with custom prompts. Best long-term fix: rely on Claude Code / Codex emitting OSC 7 when agent takes over, which covers the most important case. |
 
 ### Hard
 | Bug | Notes |
@@ -82,6 +75,10 @@
 - EmptyState shows hardcoded version
 - Detached window close leaves tab gray and unresumable
 - Show Shortcuts hotkey not persisting (was stuck on `?` / `Shift+?`)
+- Right-click session tab context menu with Close (was already implemented in SessionTabBar)
+- Right-click paste double-insert — contextmenu listener moved to capture phase; xterm.js no longer sees the event
+- Note deletion / folder deletion leaving NoteEditor blank — stale openNoteIds cleaned via sync effect; visible falls back to full sorted list when filter returns empty
+- Note tab X closes tab without deleting (openNoteIds set tracks open tabs; NotepadPane delete is separate)
 
 **UI / Polish**
 - Session group headers: gradient background + Layers icon

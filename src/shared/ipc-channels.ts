@@ -66,9 +66,18 @@ export const IPC = {
   // Git review: renderer → main (invoke)
   FS_GIT_REVIEW: 'fs:git-review',
   FS_GIT_STAGE: 'fs:git-stage',
+  FS_GIT_STAGE_ALL: 'fs:git-stage-all',
   FS_GIT_UNSTAGE: 'fs:git-unstage',
+  FS_GIT_UNSTAGE_ALL: 'fs:git-unstage-all',
   FS_GIT_COMMIT: 'fs:git-commit',
   FS_GIT_PUSH: 'fs:git-push',
+  FS_GIT_BRANCH_INFO: 'fs:git-branch-info',
+  FS_GIT_LOG: 'fs:git-log',
+
+  // Git worktrees: renderer → main (invoke)
+  FS_GIT_WORKTREE_CREATE: 'fs:git-worktree-create',
+  FS_GIT_WORKTREE_REMOVE: 'fs:git-worktree-remove',
+  FS_GIT_WORKTREE_STATS: 'fs:git-worktree-stats',
 
   // Notes: renderer → main (invoke)
   NOTES_LOAD: 'notes:load',
