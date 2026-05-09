@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react'
+import { useClickOutside } from '../../../hooks/useClickOutside'
 import { X, FolderOpen, FolderClosed, Plus, Terminal, Loader2, ExternalLink, Copy, ChevronDown, ChevronRight, Pencil, Check, Layers, Search, Maximize2, PanelLeftOpen, LayoutGrid, CircleDot, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { SESSION_COLORS } from '../session.service'
 import { Input } from '../../../components/ui/input'
@@ -27,18 +28,7 @@ function ProjectContextMenu({ x, y, path, onDismiss }: ProjectCtxMenu & { onDism
   const editors = useInstalledEditors()
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const handler = (e: MouseEvent): void => {
-      if (ref.current?.contains(e.target as Node)) return
-      onDismiss()
-    }
-    document.addEventListener('mousedown', handler, { capture: true })
-    document.addEventListener('contextmenu', handler, { capture: true })
-    return () => {
-      document.removeEventListener('mousedown', handler, { capture: true })
-      document.removeEventListener('contextmenu', handler, { capture: true })
-    }
-  }, [onDismiss])
+  useClickOutside(ref, onDismiss)
 
   const ax = Math.min(x, window.innerWidth - 220)
   const ay = Math.min(y, window.innerHeight - 200)
@@ -107,18 +97,7 @@ interface SessionCtxMenuProps {
 function SessionGroupMenu({ x, y, meta, groups, tabId, isMainWindow, onAssign, onNewGroup, onDetach, onReattach, onSetTaskStatus, onDismiss }: SessionCtxMenuProps): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const handler = (e: MouseEvent): void => {
-      if (ref.current?.contains(e.target as Node)) return
-      onDismiss()
-    }
-    document.addEventListener('mousedown', handler, { capture: true })
-    document.addEventListener('contextmenu', handler, { capture: true })
-    return () => {
-      document.removeEventListener('mousedown', handler, { capture: true })
-      document.removeEventListener('contextmenu', handler, { capture: true })
-    }
-  }, [onDismiss])
+  useClickOutside(ref, onDismiss)
 
   const ax = Math.min(x, window.innerWidth - 200)
   const ay = Math.min(y, window.innerHeight - 220)
@@ -270,18 +249,7 @@ function GroupCtxMenu({ x, y, onEdit, onOpenAllInSplits, onDelete, onDismiss }: 
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const handler = (e: MouseEvent): void => {
-      if (ref.current?.contains(e.target as Node)) return
-      onDismiss()
-    }
-    document.addEventListener('mousedown', handler, { capture: true })
-    document.addEventListener('contextmenu', handler, { capture: true })
-    return () => {
-      document.removeEventListener('mousedown', handler, { capture: true })
-      document.removeEventListener('contextmenu', handler, { capture: true })
-    }
-  }, [onDismiss])
+  useClickOutside(ref, onDismiss)
 
   const ax = Math.min(x, window.innerWidth - 180)
   const ay = Math.min(y, window.innerHeight - 140)

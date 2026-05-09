@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
+import { useClickOutside } from '../../../hooks/useClickOutside'
 import { Columns2, Rows2, ExternalLink, PanelLeftOpen, X, Trash2 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 
@@ -44,18 +45,7 @@ function MenuItem({
 export function PaneContextMenu({ x, y, isMainWindow, onDismiss, onSplitH, onSplitV, onDetach, onReattach, onClosePane, onKillSession }: Props): JSX.Element {
   const menuRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const handler = (e: MouseEvent): void => {
-      if (menuRef.current?.contains(e.target as Node)) return
-      onDismiss()
-    }
-    document.addEventListener('mousedown', handler, { capture: true })
-    document.addEventListener('contextmenu', handler, { capture: true })
-    return () => {
-      document.removeEventListener('mousedown', handler, { capture: true })
-      document.removeEventListener('contextmenu', handler, { capture: true })
-    }
-  }, [onDismiss])
+  useClickOutside(menuRef, onDismiss)
 
   const adjustedX = Math.min(x, window.innerWidth - 200)
   const adjustedY = Math.min(y, window.innerHeight - 180)

@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useClickOutside } from '../../../hooks/useClickOutside'
 import { Eye, FolderOpen, Copy, ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { showInFolder, openPath, openInEditor } from '../fs.service'
@@ -47,18 +48,7 @@ export function FileTreeContextMenu({ x, y, entry, projectRoot, rel, editors, on
   const ref = useRef<HTMLDivElement>(null)
   const isMd = entry.name.toLowerCase().endsWith('.md')
 
-  useEffect(() => {
-    const handler = (e: MouseEvent): void => {
-      if (ref.current?.contains(e.target as Node)) return
-      onDismiss()
-    }
-    document.addEventListener('mousedown', handler, { capture: true })
-    document.addEventListener('contextmenu', handler, { capture: true })
-    return () => {
-      document.removeEventListener('mousedown', handler, { capture: true })
-      document.removeEventListener('contextmenu', handler, { capture: true })
-    }
-  }, [onDismiss])
+  useClickOutside(ref, onDismiss)
 
   const adjustedX = Math.min(x, window.innerWidth - 220)
   const adjustedY = Math.min(y, window.innerHeight - 320)

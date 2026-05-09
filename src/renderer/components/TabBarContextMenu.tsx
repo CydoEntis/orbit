@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useClickOutside } from '../hooks/useClickOutside'
 import { cn } from '../lib/utils'
 
 interface Props {
@@ -37,20 +38,11 @@ export function TabBarContextMenu({ x, y, tabId, tabOrder, onClose, onDismiss }:
   const toRight = tabOrder.slice(idx + 1)
   const others = [...toLeft, ...toRight]
 
+  useClickOutside(ref, onDismiss)
   useEffect(() => {
-    const onMouse = (e: MouseEvent): void => {
-      if (ref.current?.contains(e.target as Node)) return
-      onDismiss()
-    }
     const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') onDismiss() }
-    document.addEventListener('mousedown', onMouse, { capture: true })
-    document.addEventListener('contextmenu', onMouse, { capture: true })
     document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onMouse, { capture: true })
-      document.removeEventListener('contextmenu', onMouse, { capture: true })
-      document.removeEventListener('keydown', onKey)
-    }
+    return () => document.removeEventListener('keydown', onKey)
   }, [onDismiss])
 
   const adjustedX = Math.min(x, window.innerWidth - 210)

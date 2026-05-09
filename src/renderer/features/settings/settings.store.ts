@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS } from '@shared/ipc-types'
 import type { RootStore } from '../../store/root.store'
 import { ipc } from '../../lib/ipc'
 import { IPC } from '@shared/ipc-channels'
+import { getSettings, setSettings } from './settings.service'
 
 export interface SettingsSlice {
   settings: AppSettings
@@ -27,7 +28,7 @@ export const createSettingsSlice: StateCreator<RootStore, [['zustand/immer', nev
   notes: [],
 
   loadSettings: async () => {
-    const settings = (await ipc.invoke(IPC.SETTINGS_GET)) as AppSettings
+    const settings = await getSettings()
     set((state) => {
       state.settings = settings
       state.settingsLoaded = true
@@ -37,7 +38,7 @@ export const createSettingsSlice: StateCreator<RootStore, [['zustand/immer', nev
   },
 
   updateSettings: async (patch) => {
-    const updated = (await ipc.invoke(IPC.SETTINGS_SET, patch)) as AppSettings
+    const updated = await setSettings(patch)
     set((state) => {
       state.settings = updated
     })
