@@ -2,7 +2,6 @@
 import { X, FolderOpen, FolderClosed, Plus, Terminal, Loader2, ExternalLink, Copy, ChevronDown, ChevronRight, Pencil, Check, Layers, Search, Maximize2, PanelLeftOpen, LayoutGrid, CircleDot, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { SESSION_COLORS } from '../session.service'
 import { Input } from '../../../components/ui/input'
-import { Label } from '../../../components/ui/label'
 import { createPortal } from 'react-dom'
 import { NewSessionForm } from './NewSessionForm'
 import { useStore } from '../../../store/root.store'
@@ -14,8 +13,10 @@ import { useConfirmClose } from '../hooks/useConfirmClose'
 import { useInstalledEditors } from '../../fs/hooks/useInstalledEditors'
 import { showInFolder, openInEditor, openPath } from '../../fs/fs.service'
 import { createSession, patchSession } from '../session.service'
+import { EditSessionModal } from './EditSessionModal'
+import { EditGroupModal } from './EditGroupModal'
 import { toast } from 'sonner'
-import { cn } from '../../../lib/utils'
+import { cn, shortPath } from '../../../lib/utils'
 import type { SessionMeta } from '@shared/ipc-types'
 
 const GROUP_COLORS = SESSION_COLORS
@@ -258,67 +259,6 @@ function CreateGroupModal({ pendingSessionId, onConfirm, onDismiss }: CreateGrou
   )
 }
 
-// ─── Edit group modal ─────────────────────────────────────────────────────────
-
-function EditGroupModal({ group, onConfirm, onDismiss }: {
-  group: { name: string; color?: string }
-  onConfirm: (name: string, color: string) => void
-  onDismiss: () => void
-}): JSX.Element {
-  const [name, setName] = useState(group.name)
-  const [color, setColor] = useState(group.color ?? GROUP_COLORS[0])
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => { setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select() }, 0) }, [])
-
-  const confirm = (): void => { if (name.trim()) onConfirm(name.trim(), color) }
-
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center" onMouseDown={(e) => { if (e.target === e.currentTarget) onDismiss() }}>
-      <div className="absolute inset-0 bg-black/50" />
-      <div className="relative bg-brand-surface border border-brand-panel/60 rounded-lg shadow-2xl w-72 p-5 flex flex-col gap-4">
-        <span className="text-sm font-semibold text-zinc-200">Edit Group</span>
-        <input
-          ref={inputRef}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') confirm(); if (e.key === 'Escape') onDismiss() }}
-          placeholder="Group name…"
-          className="w-full bg-brand-panel border border-brand-panel/60 rounded px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-brand-muted/50"
-        />
-        <div className="flex flex-wrap gap-2">
-          {GROUP_COLORS.map((c) => (
-            <button
-              key={c}
-              style={{ backgroundColor: c }}
-              onClick={() => setColor(c)}
-              className={cn('w-5 h-5 rounded-full flex-shrink-0 transition-all hover:scale-110', color === c ? 'ring-2 ring-offset-2 ring-offset-brand-surface ring-white/50 scale-110' : 'opacity-60')}
-            />
-          ))}
-          <label className="relative w-5 h-5 rounded-full cursor-pointer flex-shrink-0 border-2 border-dashed border-zinc-600 hover:border-zinc-400 transition-colors flex items-center justify-center overflow-hidden" title="Custom color">
-            <span className="absolute inset-0 rounded-full" style={{ backgroundColor: GROUP_COLORS.includes(color as any) ? 'transparent' : color }} />
-            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
-            {GROUP_COLORS.includes(color as any) && <span className="text-zinc-600 text-[8px]">+</span>}
-          </label>
-        </div>
-        <div className="flex gap-2 justify-end">
-          <button onClick={onDismiss} className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors rounded hover:bg-brand-panel">
-            Cancel
-          </button>
-          <button
-            onClick={confirm}
-            disabled={!name.trim()}
-            className="px-3 py-1.5 text-xs bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 transition-colors rounded disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Save
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  )
-}
-
 // ─── Group context menu ───────────────────────────────────────────────────────
 
 function GroupCtxMenu({ x, y, onEdit, onOpenAllInSplits, onDelete, onDismiss }: {
@@ -418,12 +358,6 @@ function ProjectSection({ path, name, colorIndex, refreshTick, activeFilePath, d
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function shortPath(p: string): string {
-  const parts = p.replace(/\\/g, '/').split('/').filter(Boolean)
-  if (parts.length <= 2) return p.replace(/\\/g, '/')
-  return `…/${parts.slice(-2).join('/')}`
-}
-
 function timeAgo(ts: number): string {
   const s = Math.floor((Date.now() - ts) / 1000)
   if (s < 60) return `${s}s`
@@ -432,8 +366,6 @@ function timeAgo(ts: number): string {
 }
 
 // ─── Session row ─────────────────────────────────────────────────────────────
-
-const MAX_NAME_LENGTH = 32
 
 interface SessionRowProps {
   meta: SessionMeta
@@ -455,29 +387,18 @@ function SessionRow({ meta, isFocused, tabId, openProjects, onActivate, onClose,
   const upsertSession = useStore((s) => s.upsertSession)
   const isRunning = meta.status === 'running'
   const agentStatus = meta.agentStatus ?? 'idle'
-  const sessionColor = meta.color ?? '#22c55e'
+  const sessionColor = meta.color ?? SESSION_COLORS[0]
 
   const [editOpen, setEditOpen] = useState(false)
-  const [editName, setEditName] = useState(meta.name)
-  const [editColor, setEditColor] = useState(meta.color ?? '#22c55e')
-  const [nameError, setNameError] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   const openEdit = (e: React.MouseEvent): void => {
     e.stopPropagation()
-    setEditName(meta.name)
-    setEditColor(meta.color ?? '#22c55e')
-    setNameError(null)
     setEditOpen(true)
-    setTimeout(() => inputRef.current?.select(), 0)
   }
 
-  const handleSave = async (): Promise<void> => {
-    const trimmed = editName.trim()
-    if (!trimmed) { setNameError('Name cannot be blank'); return }
-    if (trimmed.length > MAX_NAME_LENGTH) { setNameError(`Max ${MAX_NAME_LENGTH} characters`); return }
+  const handleSave = async (name: string, color: string): Promise<void> => {
     setEditOpen(false)
-    const updated = await patchSession({ sessionId: meta.sessionId, name: trimmed, color: editColor })
+    const updated = await patchSession({ sessionId: meta.sessionId, name, color })
     upsertSession(updated)
     toast.success('Session updated')
   }
@@ -538,65 +459,7 @@ function SessionRow({ meta, isFocused, tabId, openProjects, onActivate, onClose,
         </div>
       </div>
 
-      {editOpen && createPortal(
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setEditOpen(false) }}
-        >
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative bg-brand-surface border border-brand-panel/60 rounded-lg shadow-2xl w-80 p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-zinc-200">Edit Session</span>
-              <button onClick={() => setEditOpen(false)} className="text-zinc-500 hover:text-zinc-300 transition-colors"><X size={14} /></button>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-zinc-500">Name</Label>
-                <span className={cn('text-xs', editName.trim().length > MAX_NAME_LENGTH ? 'text-red-400' : 'text-zinc-600')}>
-                  {editName.trim().length}/{MAX_NAME_LENGTH}
-                </span>
-              </div>
-              <Input
-                ref={inputRef}
-                value={editName}
-                onChange={(e) => { setEditName(e.target.value); setNameError(null) }}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditOpen(false) }}
-                className={cn(nameError ? 'border-red-500/70 focus-visible:ring-0 focus:border-red-400' : '')}
-              />
-              {nameError && <span className="text-xs text-red-400">{nameError}</span>}
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label className="text-xs text-zinc-500">Color</Label>
-              <div className="flex gap-2 flex-wrap items-center">
-                {SESSION_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setEditColor(c)}
-                    style={{ backgroundColor: c }}
-                    className={cn('w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0', editColor === c && 'ring-2 ring-white ring-offset-2 ring-offset-brand-surface scale-110')}
-                  />
-                ))}
-                <label className="relative w-7 h-7 rounded-full cursor-pointer flex-shrink-0 border-2 border-dashed border-zinc-600 hover:border-zinc-400 transition-colors flex items-center justify-center overflow-hidden" title="Custom color">
-                  <span className="absolute inset-0 rounded-full" style={{ backgroundColor: SESSION_COLORS.includes(editColor as any) ? 'transparent' : editColor }} />
-                  <input type="color" value={editColor} onChange={(e) => setEditColor(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
-                  {SESSION_COLORS.includes(editColor as any) && <span className="text-zinc-600 text-[10px]">+</span>}
-                </label>
-              </div>
-            </div>
-            <div className="flex gap-2 justify-end pt-1">
-              <button onClick={() => setEditOpen(false)} className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors rounded">Cancel</button>
-              <button
-                onClick={handleSave}
-                disabled={!!nameError || !editName.trim()}
-                className="px-4 py-1.5 text-xs font-medium rounded bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      {editOpen && <EditSessionModal meta={meta} onSave={handleSave} onDismiss={() => setEditOpen(false)} />}
     </>
   )
 }
@@ -645,7 +508,7 @@ function GroupSection({ group, sessions, collapsed, onToggle, onEdit, onDelete, 
       {editModalOpen && (
         <EditGroupModal
           group={group}
-          onConfirm={(name, color) => { onEdit(name, color); setEditModalOpen(false) }}
+          onSave={(name, color) => { onEdit(name, color); setEditModalOpen(false) }}
           onDismiss={() => setEditModalOpen(false)}
         />
       )}
