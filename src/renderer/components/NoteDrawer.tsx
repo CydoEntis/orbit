@@ -38,9 +38,11 @@ interface FileTreeProps {
   activeNoteId: string | null
   onActivate: (id: string) => void
   onCreate: () => void
+  onNoteDragStart?: (noteId: string) => void
+  onNoteDragEnd?: () => void
 }
 
-function FileTree({ activeNoteId, onActivate, onCreate }: FileTreeProps): JSX.Element {
+export function FileTree({ activeNoteId, onActivate, onCreate, onNoteDragStart, onNoteDragEnd }: FileTreeProps): JSX.Element {
   const notes = useStore((s) => s.notes)
   const noteFolders = useStore((s) => s.settings.noteFolders ?? [])
   const noteFolderMap = useStore((s) => s.settings.noteFolderMap ?? {})
@@ -188,8 +190,8 @@ function FileTree({ activeNoteId, onActivate, onCreate }: FileTreeProps): JSX.El
                 <button
                   key={note.id}
                   draggable
-                  onDragStart={() => setDragNoteId(note.id)}
-                  onDragEnd={() => { setDragNoteId(null); setDragOverFolderId(null) }}
+                  onDragStart={() => { setDragNoteId(note.id); onNoteDragStart?.(note.id) }}
+                  onDragEnd={() => { setDragNoteId(null); setDragOverFolderId(null); onNoteDragEnd?.() }}
                   onClick={() => onActivate(note.id)}
                   onContextMenu={(e) => handleContextMenu(e, 'note', note.id)}
                   style={isActive ? { background: `linear-gradient(to right, ${nc}22, transparent)`, borderLeftColor: nc } : undefined}

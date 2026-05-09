@@ -5,7 +5,7 @@ export type DropSide = 'top' | 'bottom' | 'left' | 'right'
 export type DragState =
   | { type: 'layout-leaf'; leafId: string; tabId: string }
   | { type: 'sidebar-session'; sessionId: string }
-  | { type: 'sidebar-notes' }
+  | { type: 'sidebar-notes'; noteId: string }
 
 export interface DropTarget {
   leafId: string

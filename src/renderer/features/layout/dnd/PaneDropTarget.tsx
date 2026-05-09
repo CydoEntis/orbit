@@ -3,6 +3,7 @@ import { GripVertical } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { useLayoutDnd } from './LayoutDndContext'
 import { useStore } from '../../../store/root.store'
+import { makeNotesLeaf } from '../layout-tree'
 import type { DropSide } from './LayoutDndContext'
 
 interface Props {
@@ -40,6 +41,7 @@ export function PaneDropTarget({ leafId, tabId, children }: Props): JSX.Element 
   const { dragState, activeDropTarget, startDrag, endDrag, setActiveDropTarget } = useLayoutDnd()
   const moveLayout = useStore((s) => s.moveLayout)
   const insertSessionIntoLayout = useStore((s) => s.insertSessionIntoLayout)
+  const insertLayout = useStore((s) => s.insertLayout)
 
   const isDragging = dragState !== null
   const isSource = dragState?.type === 'layout-leaf' && dragState.leafId === leafId
@@ -77,6 +79,8 @@ export function PaneDropTarget({ leafId, tabId, children }: Props): JSX.Element 
       if (dragState.tabId === tabId) moveLayout(tabId, dragState.leafId, leafId, direction, side)
     } else if (dragState.type === 'sidebar-session') {
       insertSessionIntoLayout(tabId, leafId, dragState.sessionId, direction, side)
+    } else if (dragState.type === 'sidebar-notes') {
+      insertLayout(tabId, leafId, direction, makeNotesLeaf(dragState.noteId), side)
     }
     endDrag()
   }, [dragState, activeZone, tabId, leafId, moveLayout, insertSessionIntoLayout, endDrag])

@@ -30,7 +30,7 @@ export function PaneTreeRenderer({ node, tabId, onContextMenu, forceMainWindow, 
       return (
         <PaneDropTarget leafId={node.id} tabId={tabId}>
           <div className="flex flex-col w-full h-full bg-brand-surface">
-            <NotesPane tabId={tabId} />
+            <NotesPane tabId={tabId} leafId={node.id} initialNoteId={node.noteId} />
           </div>
         </PaneDropTarget>
       )

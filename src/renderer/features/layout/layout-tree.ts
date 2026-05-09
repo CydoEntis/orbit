@@ -4,7 +4,7 @@ function makeId(): string {
 
 export type LayoutLeaf =
   | { type: 'leaf'; id: string; panel: 'terminal'; sessionId: string }
-  | { type: 'leaf'; id: string; panel: 'notes' }
+  | { type: 'leaf'; id: string; panel: 'notes'; noteId?: string }
 
 export type LayoutSplit = {
   type: 'split'
@@ -19,8 +19,8 @@ export function makeTerminalLeaf(sessionId: string): LayoutLeaf {
   return { type: 'leaf', id: makeId(), panel: 'terminal', sessionId }
 }
 
-export function makeNotesLeaf(): LayoutLeaf {
-  return { type: 'leaf', id: makeId(), panel: 'notes' }
+export function makeNotesLeaf(noteId?: string): LayoutLeaf {
+  return { type: 'leaf', id: makeId(), panel: 'notes', noteId }
 }
 
 /** Insert newLeaf next to targetId, splitting in the given direction */
