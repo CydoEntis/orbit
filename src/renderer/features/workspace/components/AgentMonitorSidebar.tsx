@@ -1,10 +1,9 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { Plus, ChevronDown, ChevronRight, Loader2, FolderOpen, Pencil, X, Users, Trash2, Scissors, ExternalLink, Columns2, PanelLeftOpen } from 'lucide-react'
-import { createPortal } from 'react-dom'
+import { Plus, ChevronDown, ChevronRight, FolderOpen, X, Users } from 'lucide-react'
 import { useStore } from '../../../store/root.store'
 import { useLayoutDnd } from '../../layout/dnd/LayoutDndContext'
 import { useProjects } from '../../session/hooks/useProjects'
-import { patchSession, killSession, SESSION_COLORS, GROUP_COLORS } from '../../session/session.service'
+import { patchSession, killSession } from '../../session/session.service'
 import { EditSessionModal } from '../../session/components/EditSessionModal'
 import { EditGroupModal } from '../../session/components/EditGroupModal'
 import { removeWorktree } from '../../fs/fs.service'
@@ -15,9 +14,12 @@ import { useConfirmClose } from '../../session/hooks/useConfirmClose'
 import { FileTree } from '../../../components/NoteDrawer'
 import { toast } from 'sonner'
 import { cn, normalizePath, shortPath } from '../../../lib/utils'
-import { Input } from '../../../components/ui/input'
-import { Button } from '../../../components/ui/button'
 import { Skeleton } from '../../../components/ui/skeleton'
+import { SessionRow } from './SessionRow'
+import { SessionCtxMenu } from './SessionCtxMenu'
+import { GroupCtxMenu } from './GroupCtxMenu'
+import { NewGroupModal } from './NewGroupModal'
+import { ConfirmCloseProjectModal } from './ConfirmCloseProjectModal'
 import type { SessionMeta } from '@shared/ipc-types'
 
 interface Props {
@@ -25,80 +27,6 @@ interface Props {
   onProjectChange: (path: string | null) => void
   activeSessionId: string | null
   onSelectSession: (id: string | null) => void
-}
-
-interface SessionRowProps {
-  meta: SessionMeta
-  activeSessionId: string | null
-  worktreeStats: Record<string, { added: number; deleted: number; commits: number }>
-  isNoWorkspace: boolean
-  dragging: boolean
-  onSelectSession: (id: string) => void
-  onEditMeta: (meta: SessionMeta) => void
-  onCtxMenu: (v: { x: number; y: number; meta: SessionMeta }) => void
-  onDragStart: (id: string) => void
-  onDragEnd: () => void
-  paneCount?: number
-}
-
-function SessionRow({ meta, activeSessionId, worktreeStats, isNoWorkspace, dragging, onSelectSession, onEditMeta, onCtxMenu, onDragStart, onDragEnd, paneCount }: SessionRowProps): JSX.Element {
-  const { startDrag, endDrag } = useLayoutDnd()
-  const isSelected = activeSessionId === meta.sessionId
-  const isRunning = meta.status === 'running'
-  const agentStatus = meta.agentStatus ?? 'idle'
-  const sessionColor = meta.color ?? SESSION_COLORS[0]
-  const stats = isNoWorkspace ? undefined : worktreeStats[meta.sessionId]
-  const hasStats = stats && (stats.added > 0 || stats.deleted > 0)
-  const subtext = isNoWorkspace ? shortPath(meta.cwd) : (meta.worktreeBranch ?? shortPath(meta.cwd))
-
-  return (
-    <button
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = 'move'
-        onDragStart(meta.sessionId)
-        startDrag({ type: 'sidebar-session', sessionId: meta.sessionId })
-      }}
-      onDragEnd={() => { onDragEnd(); endDrag() }}
-      onClick={() => onSelectSession(meta.sessionId)}
-      onDoubleClick={(e) => { e.stopPropagation(); onEditMeta(meta) }}
-      onContextMenu={(e) => { e.preventDefault(); onCtxMenu({ x: e.clientX, y: e.clientY, meta }) }}
-      className={cn('w-full flex flex-col gap-0.5 px-3 py-2 transition-all border-l-2 text-left', dragging && 'opacity-40')}
-      style={{ borderLeftColor: isSelected ? sessionColor : 'transparent', background: `linear-gradient(to right, ${sessionColor}${isSelected ? '2e' : '12'}, transparent)` }}
-    >
-      <div className="flex items-center gap-2 min-w-0">
-        {isRunning && agentStatus === 'running' ? (
-          <Loader2 size={11} className="flex-shrink-0 animate-spin" style={{ color: sessionColor }} />
-        ) : isRunning && agentStatus === 'waiting-input' ? (
-          <span className="w-2.5 h-2.5 flex-shrink-0 animate-pulse" style={{ backgroundColor: sessionColor, borderRadius: '3px' }} />
-        ) : (
-          <span className="w-2.5 h-2.5 flex-shrink-0" style={{ backgroundColor: isRunning ? sessionColor : '#52525b', borderRadius: '3px' }} />
-        )}
-        <span className={cn('text-xs font-medium truncate flex-1 min-w-0', isSelected ? 'text-zinc-100' : 'text-zinc-500')}>{meta.name}</span>
-        {paneCount && paneCount > 1 && (
-          <span
-            className="text-[10px] font-semibold rounded px-1.5 py-0.5 flex-shrink-0 leading-none tabular-nums"
-            style={{ backgroundColor: `${sessionColor}28`, color: sessionColor }}
-          >
-            {paneCount}
-          </span>
-        )}
-        {!isNoWorkspace && (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {hasStats && (
-              <span className="text-[10px] font-mono leading-none">
-                <span className="text-green-500">+{stats.added}</span>
-                <span className="text-zinc-600 mx-0.5">·</span>
-                <span className="text-red-500">-{stats.deleted}</span>
-              </span>
-            )}
-            {stats && stats.commits > 0 && <span className="text-[10px] text-zinc-500 leading-none">⑂{stats.commits}</span>}
-          </div>
-        )}
-      </div>
-      <div className={cn('pl-3.5 text-[10px] truncate font-mono', isSelected ? 'text-zinc-400' : 'text-zinc-600')}>{subtext}</div>
-    </button>
-  )
 }
 
 export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSessionId, onSelectSession }: Props): JSX.Element {
@@ -125,10 +53,7 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
 
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [confirmCloseProject, setConfirmCloseProject] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [footerMode, setFooterMode] = useState<'idle' | 'newGroup'>('idle')
-  const [newGroupName, setNewGroupName] = useState('')
-  const [newGroupColor, setNewGroupColor] = useState(GROUP_COLORS[0])
+  const [showNewGroupModal, setShowNewGroupModal] = useState(false)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; meta: SessionMeta } | null>(null)
   const [editMeta, setEditMeta] = useState<SessionMeta | null>(null)
   const [groupCtxMenu, setGroupCtxMenu] = useState<{ x: number; y: number; group: { id: string; name: string; color?: string } } | null>(null)
@@ -141,7 +66,6 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
   const [splitPercent, setSplitPercent] = useState(50)
   const [sidebarActiveNoteId, setSidebarActiveNoteId] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const nameInputRef = useRef<HTMLInputElement>(null)
   const sidebarBodyRef = useRef<HTMLDivElement>(null)
 
   const isNoWorkspace = activeProject === null
@@ -172,11 +96,8 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
     return { byGroup, ungrouped }
   }, [isNoWorkspace, projectSessions])
 
-  useEffect(() => { if (footerMode !== 'idle') nameInputRef.current?.focus() }, [footerMode])
-
   useEffect(() => {
-    setFooterMode('idle')
-    setNewGroupName(''); setNewGroupColor(GROUP_COLORS[0])
+    setShowNewGroupModal(false)
   }, [normalizedActive, isNoWorkspace])
 
   useEffect(() => {
@@ -184,11 +105,6 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
       onSelectSession(projectSessions[0].sessionId)
     }
   }, [projectSessions.length, activeSessionId, isNoWorkspace, onSelectSession])
-
-  const resetFooter = (): void => {
-    setFooterMode('idle')
-    setNewGroupName(''); setNewGroupColor(GROUP_COLORS[0])
-  }
 
   useEffect(() => {
     setSidebarActiveNoteId(null)
@@ -315,21 +231,27 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
     await updateSettings({ sessionGroups: sessionGroups.filter((g) => g.id !== groupId) })
   }, [projectSessions, sessionGroups, updateSettings, upsertSession])
 
-  const handleCreateGroup = useCallback(async () => {
-    const name = newGroupName.trim()
-    if (!name || creating) return
-    setCreating(true)
-    try {
-      const id = crypto.randomUUID()
-      await updateSettings({ sessionGroups: [...sessionGroups, { id, name, color: newGroupColor }] })
-      toast.success(`Group "${name}" created`)
-      resetFooter()
-    } catch (err) {
-      toast.error(`Group failed: ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
-      setCreating(false)
-    }
-  }, [newGroupName, newGroupColor, creating, sessionGroups, updateSettings])
+  const handleCreateGroup = useCallback(async (name: string, color: string): Promise<void> => {
+    const id = crypto.randomUUID()
+    await updateSettings({ sessionGroups: [...sessionGroups, { id, name, color }] })
+    toast.success(`Group "${name}" created`)
+  }, [sessionGroups, updateSettings])
+
+  const handleDetach = useCallback((sessionId: string): void => {
+    if (!windowId) return
+    detachPane(sessionId, sessionId)
+    void detachTab(sessionId, windowId)
+    if (activeSessionId === sessionId) onSelectSession(null)
+  }, [detachPane, windowId, activeSessionId, onSelectSession])
+
+  const handleReattach = useCallback((sessionId: string): void => {
+    void reattachTab(sessionId, windowId ?? undefined)
+  }, [windowId])
+
+  const handleSplitHere = useCallback((sessionId: string): void => {
+    if (!activeSessionId) return
+    openGroupInSplits([activeSessionId, sessionId])
+  }, [activeSessionId, openGroupInSplits])
 
   const workspaceLabel = isNoWorkspace ? 'No Workspace'
     : normalizedActive ? normalizedActive.split('/').filter(Boolean).pop() ?? normalizedActive
@@ -532,14 +454,13 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
       {/* Body: Sessions section + Notes section */}
       <div className="flex flex-col flex-1 min-h-0" ref={sidebarBodyRef}>
 
-        {/* ── Sessions section ── */}
+        {/* Sessions section */}
         <div
           className={cn('flex flex-col min-h-0', !sessionsOpen && 'flex-shrink-0')}
           style={sessionsOpen
             ? (notesOpen ? { flex: `0 0 ${splitPercent}%` } : { flex: '1 1 0' })
             : undefined}
         >
-          {/* Sessions header */}
           <div
             className="flex-shrink-0 flex items-center gap-0.5 px-3 py-1.5 border-b border-brand-panel/40 cursor-pointer hover:bg-brand-panel/30 transition-colors select-none"
             onClick={() => setSessionsOpen((v) => !v)}
@@ -559,7 +480,7 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
                   <Plus size={12} />
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setFooterMode('newGroup') }}
+                  onClick={(e) => { e.stopPropagation(); setShowNewGroupModal(true) }}
                   className="p-1 text-zinc-600 hover:text-zinc-300 rounded hover:bg-brand-panel/60 transition-colors"
                   title="New Group"
                 >
@@ -577,7 +498,6 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
             ))}
           </div>
 
-          {/* Sessions list */}
           {sessionsOpen && (
             <div className="flex-1 overflow-y-auto min-h-0 py-1">
               {sessionListContent}
@@ -593,9 +513,8 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
           />
         )}
 
-        {/* ── Notes section ── */}
+        {/* Notes section */}
         <div className={cn('flex flex-col flex-shrink-0', notesOpen && 'flex-1 min-h-0')}>
-          {/* Notes header */}
           <div
             className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 border-t border-brand-panel/40 cursor-pointer hover:bg-brand-panel/30 transition-colors select-none"
             onClick={() => setNotesOpen((v) => !v)}
@@ -614,7 +533,6 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
             </button>
           </div>
 
-          {/* Notes file tree */}
           {notesOpen && (
             <div className="flex-1 min-h-0 relative overflow-hidden">
               <div className="absolute inset-0">
@@ -631,93 +549,39 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
         </div>
       </div>
 
-      {/* Context menu */}
-      {ctxMenu && createPortal(
-        <>
-          <div className="fixed inset-0 z-[9998]" onMouseDown={() => setCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null) }} />
-          <div className="fixed z-[9999] bg-brand-surface border border-brand-panel/60 rounded shadow-xl py-1 min-w-[160px]" style={{ left: Math.min(ctxMenu.x, window.innerWidth - 180), top: Math.min(ctxMenu.y, window.innerHeight - 150) }}>
-            <button onMouseDown={(e) => { e.stopPropagation(); setEditMeta(ctxMenu.meta); setCtxMenu(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors">
-              <Pencil size={12} />Rename / Recolor
-            </button>
-            {activeSessionId && activeSessionId !== ctxMenu.meta.sessionId && ctxMenu.meta.status === 'running' && !collectSessionIds(paneTree[activeSessionId] ?? { type: 'leaf', sessionId: '' }).includes(ctxMenu.meta.sessionId) && (
-              <>
-                <div className="my-1 border-t border-brand-panel/60" />
-                <button
-                  onMouseDown={(e) => {
-                    e.stopPropagation()
-                    openGroupInSplits([activeSessionId, ctxMenu.meta.sessionId])
-                    setCtxMenu(null)
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors"
-                >
-                  <Columns2 size={12} />Split Here
-                </button>
-              </>
-            )}
-            {isMainWindow && (
-              <>
-                <div className="my-1 border-t border-brand-panel/60" />
-                {findTabForSession(paneTree, ctxMenu.meta.sessionId) && windowId ? (
-                  <button
-                    onMouseDown={(e) => {
-                      e.stopPropagation()
-                      const sid = ctxMenu.meta.sessionId
-                      detachPane(sid, sid)
-                      void detachTab(sid, windowId)
-                      if (activeSessionId === sid) onSelectSession(null)
-                      setCtxMenu(null)
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors"
-                  >
-                    <ExternalLink size={12} />Detach to Window
-                  </button>
-                ) : (
-                  <button
-                    onMouseDown={(e) => {
-                      e.stopPropagation()
-                      void reattachTab(ctxMenu.meta.sessionId, windowId ?? undefined)
-                      setCtxMenu(null)
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors"
-                  >
-                    <PanelLeftOpen size={12} />Reattach to Main
-                  </button>
-                )}
-              </>
-            )}
-            {ctxMenu.meta.groupId && projectSessions.some((s) => s.groupId === ctxMenu.meta.groupId && /^Split #\d+$/.test(s.name)) && (
-              <>
-                <div className="my-1 border-t border-brand-panel/60" />
-                <button onMouseDown={(e) => { e.stopPropagation(); void handleCloseAllSplits(ctxMenu.meta); setCtxMenu(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors">
-                  <Scissors size={12} />Close All Splits
-                </button>
-              </>
-            )}
-            <div className="my-1 border-t border-brand-panel/60" />
-            <button onMouseDown={(e) => { e.stopPropagation(); handleCloseSession(ctxMenu.meta); setCtxMenu(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-red-400 hover:bg-brand-panel hover:text-red-300 transition-colors">
-              <Trash2 size={12} />Kill Session
-            </button>
-          </div>
-        </>,
-        document.body
+      {ctxMenu && (
+        <SessionCtxMenu
+          ctxMenu={ctxMenu}
+          onDismiss={() => setCtxMenu(null)}
+          onRename={setEditMeta}
+          onSplitHere={handleSplitHere}
+          onDetach={handleDetach}
+          onReattach={handleReattach}
+          onCloseAllSplits={handleCloseAllSplits}
+          onKill={handleCloseSession}
+          activeSessionId={activeSessionId}
+          paneTree={paneTree}
+          isMainWindow={isMainWindow}
+          windowId={windowId}
+          projectSessions={projectSessions}
+        />
       )}
 
-      {editMeta && <EditSessionModal meta={editMeta} onSave={(name, color) => handleEditSave(editMeta, name, color)} onDismiss={() => setEditMeta(null)} />}
+      {editMeta && (
+        <EditSessionModal
+          meta={editMeta}
+          onSave={(name, color) => handleEditSave(editMeta, name, color)}
+          onDismiss={() => setEditMeta(null)}
+        />
+      )}
 
-      {groupCtxMenu && createPortal(
-        <>
-          <div className="fixed inset-0 z-[9998]" onMouseDown={() => setGroupCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setGroupCtxMenu(null) }} />
-          <div className="fixed z-[9999] bg-brand-surface border border-brand-panel/60 rounded shadow-xl py-1 min-w-[160px]" style={{ left: Math.min(groupCtxMenu.x, window.innerWidth - 180), top: Math.min(groupCtxMenu.y, window.innerHeight - 100) }}>
-            <button onMouseDown={(e) => { e.stopPropagation(); setEditingGroup(groupCtxMenu.group); setGroupCtxMenu(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors">
-              <Pencil size={12} />Rename / Recolor
-            </button>
-            <div className="my-1 border-t border-brand-panel/60" />
-            <button onMouseDown={(e) => { e.stopPropagation(); void handleDeleteGroup(groupCtxMenu.group.id); setGroupCtxMenu(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-red-400 hover:bg-brand-panel hover:text-red-300 transition-colors">
-              <X size={12} />Delete Group
-            </button>
-          </div>
-        </>,
-        document.body
+      {groupCtxMenu && (
+        <GroupCtxMenu
+          groupCtxMenu={groupCtxMenu}
+          onDismiss={() => setGroupCtxMenu(null)}
+          onEdit={setEditingGroup}
+          onDelete={(id) => void handleDeleteGroup(id)}
+        />
       )}
 
       {editingGroup && (
@@ -727,68 +591,25 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
           onDismiss={() => setEditingGroup(null)}
         />
       )}
+
       {closeModal}
 
-      {confirmCloseProject && activeProject && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center" onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirmCloseProject(false) }}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative bg-brand-surface border border-brand-panel/60 rounded-lg shadow-2xl w-80 p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-zinc-200">Close Project</span>
-              <button onClick={() => setConfirmCloseProject(false)} className="text-zinc-500 hover:text-zinc-300 transition-colors"><X size={14} /></button>
-            </div>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              This will kill all sessions and delete all worktrees for <span className="text-zinc-200 font-medium">{workspaceLabel}</span>. This cannot be undone.
-            </p>
-            <div className="flex gap-2 justify-end pt-1">
-              <Button variant="ghost" size="sm" onClick={() => setConfirmCloseProject(false)}>Cancel</Button>
-              <Button
-                size="sm"
-                onClick={async () => {
-                  setConfirmCloseProject(false)
-                  await removeProject(activeProject)
-                  onProjectChange(null)
-                }}
-                className="bg-red-500/20 text-red-400 hover:bg-red-500/30"
-              >
-                Close Project
-              </Button>
-            </div>
-          </div>
-        </div>,
-        document.body
+      {confirmCloseProject && activeProject && (
+        <ConfirmCloseProjectModal
+          workspaceLabel={workspaceLabel}
+          onClose={() => setConfirmCloseProject(false)}
+          onConfirm={() => {
+            setConfirmCloseProject(false)
+            void removeProject(activeProject).then(() => onProjectChange(null))
+          }}
+        />
       )}
 
-      {/* New Group modal */}
-      {footerMode === 'newGroup' && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center" onMouseDown={(e) => { if (e.target === e.currentTarget) resetFooter() }}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative bg-brand-surface border border-brand-panel/60 rounded-lg shadow-2xl w-72 p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-zinc-200">New Group</span>
-              <button onClick={resetFooter} className="text-zinc-500 hover:text-zinc-300 transition-colors"><X size={14} /></button>
-            </div>
-            <Input
-              ref={nameInputRef}
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !creating) void handleCreateGroup(); if (e.key === 'Escape') resetFooter() }}
-              placeholder="group name"
-            />
-            <div className="flex gap-2 flex-wrap">
-              {GROUP_COLORS.map((c) => (
-                <button key={c} onClick={() => setNewGroupColor(c)} style={{ backgroundColor: c }} className={cn('w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0', newGroupColor === c && 'ring-2 ring-white ring-offset-2 ring-offset-brand-surface scale-110')} />
-              ))}
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="ghost" size="sm" onClick={resetFooter}>Cancel</Button>
-              <Button size="sm" onClick={() => void handleCreateGroup()} disabled={creating || !newGroupName.trim()} className="bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 disabled:opacity-40">
-                {creating ? <Loader2 size={11} className="animate-spin inline" /> : 'Create'}
-              </Button>
-            </div>
-          </div>
-        </div>,
-        document.body
+      {showNewGroupModal && (
+        <NewGroupModal
+          onDismiss={() => setShowNewGroupModal(false)}
+          onSave={handleCreateGroup}
+        />
       )}
     </div>
   )
