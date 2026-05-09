@@ -6,6 +6,7 @@ import {
   splitTerminalLeaf, removeTerminalLeaf,
   removeNode, insertAtRight, insertNode, moveNode, replaceNode,
   collectSessionIds, findTabForSession, findNotesLeafId, hasMarkdownPreviewForNote,
+  findTerminalLeafId,
 } from '../layout/layout-tree'
 import type { LayoutNode, LayoutLeaf } from '../layout/layout-tree'
 
@@ -49,6 +50,7 @@ export interface SessionSlice {
   replaceLayoutLeaf: (tabId: string, leafId: string, replacement: LayoutNode) => void
   insertLayoutAtRight: (tabId: string, newLeaf: LayoutLeaf) => void
   insertSessionAtRight: (targetTabId: string, sessionId: string) => void
+  switchPaneSession: (tabId: string, toSessionId: string) => void
 }
 
 export const createSessionSlice: StateCreator<RootStore, [['zustand/immer', never]], [], SessionSlice> = (set) => ({
@@ -323,6 +325,12 @@ export const createSessionSlice: StateCreator<RootStore, [['zustand/immer', neve
         if (sourceTree) {
           const newSourceTree = removeTerminalLeaf(sourceTree, sessionId)
           if (!newSourceTree) {
+            // Session is the only pane in this tab. If it's the same tab as the target,
+            // deleting the source tree would also delete the target — leave it in place.
+            if (sourceTabId === targetTabId) {
+              state.focusedSessionId = sessionId
+              return
+            }
             if (sourceTabId === '__root__') { state.paneTree['__root__'] = makeHomeLeaf() } else {
               state.tabOrder = state.tabOrder.filter((id) => id !== sourceTabId)
               delete state.paneTree[sourceTabId]
@@ -376,5 +384,18 @@ export const createSessionSlice: StateCreator<RootStore, [['zustand/immer', neve
       }
       state.activeSessionId = targetTabId
       state.focusedSessionId = sessionId
+    }),
+
+  switchPaneSession: (tabId, toSessionId) =>
+    set((state) => {
+      const tree = state.paneTree[tabId]
+      if (!tree) return
+      // Replace the focused session's pane; fall back to the first terminal in the tab
+      const focusedLeafId = state.focusedSessionId ? findTerminalLeafId(tree, state.focusedSessionId) : null
+      const leafId = focusedLeafId ?? findTerminalLeafId(tree, collectSessionIds(tree)[0] ?? '')
+      if (!leafId) return
+      state.paneTree[tabId] = replaceNode(tree, leafId, makeTerminalLeaf(toSessionId))
+      state.activeSessionId = tabId
+      state.focusedSessionId = toSessionId
     }),
 })

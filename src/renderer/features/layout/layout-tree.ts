@@ -114,6 +114,15 @@ export function findLeafById(node: LayoutNode, id: string): LayoutLeaf | null {
   return null
 }
 
+export function findTerminalLeafId(node: LayoutNode, sessionId: string): string | null {
+  if (node.type === 'leaf') return (node.panel === 'terminal' && node.sessionId === sessionId) ? node.id : null
+  for (const child of node.children) {
+    const found = findTerminalLeafId(child, sessionId)
+    if (found) return found
+  }
+  return null
+}
+
 export function findNotesLeafId(node: LayoutNode): string | null {
   if (node.type === 'leaf') return node.panel === 'notes' ? node.id : null
   for (const child of node.children) {

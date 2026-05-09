@@ -9,6 +9,15 @@ import { openExternal, readClipboard } from '../../fs/fs.service'
 import { useStore } from '../../../store/root.store'
 import type { SessionDataPayload } from '@shared/ipc-types'
 
+interface PoolEntry {
+  terminal: Terminal
+  fitAddon: FitAddon
+  searchAddon: SearchAddon
+}
+// Module-level pool: preserves xterm instances across React remounts caused by layout changes.
+// Entries are fully disposed only when the session leaves the store (closed, not just moved).
+const terminalPool = new Map<string, PoolEntry>()
+
 const TOOL_FILE_RE = /●\s+(?:Edit|Write|Update)\(([^)\n]+)\)/
 const DIFF_LINE_RE = /^\s{2,}(\d+) ([+\- ])(.*)$/
 const DIFF_SUMMARY_RE = /[└⎿─]|Added\s+\d+|Removed\s+\d+|Modified\s+\d+/
@@ -255,43 +264,80 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
     if (!containerRef.current) return
     const container = containerRef.current
 
-    const terminal = new Terminal({
-      fontSize: settings.fontSize,
-      fontFamily: settings.fontFamily,
-      theme: resolveTerminalTheme(useStore.getState().settings.theme),
-      cursorBlink: true,
-      allowProposedApi: true
-    })
+    // Reuse an existing terminal instance if this session was previously mounted
+    // (e.g. layout changed from leaf→split, causing React to unmount/remount TerminalPane).
+    // Re-parenting the element avoids replaying the full session history again.
+    const existing = terminalPool.get(sessionId)
+    let terminal: Terminal
+    let fitAddon: FitAddon
+    let searchAddon: SearchAddon
 
-    const fitAddon = new FitAddon()
-    const searchAddon = new SearchAddon()
-    terminal.loadAddon(fitAddon)
-    terminal.loadAddon(searchAddon)
-    terminal.open(container)
-    searchAddonRef.current = searchAddon
-    // Immediate fit: by the time useEffect runs, react-resizable-panels has already applied
-    // panel CSS sizes via useLayoutEffect, so the container has real pixel dimensions.
-    // This ensures replay data arrives into a correctly-sized terminal.
-    try { fitAddon.fit() } catch {}
-    // Double-RAF + fallback: safety net for any edge cases where CSS settles later.
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      try { fitAddon.fit() } catch {}
-      terminal.focus()
-    }))
-    const fallbackFitTimer = setTimeout(() => { try { fitAddon.fit() } catch {} }, 200)
+    if (existing) {
+      terminal = existing.terminal
+      fitAddon = existing.fitAddon
+      searchAddon = existing.searchAddon
+      if (terminal.element) container.appendChild(terminal.element)
+    } else {
+      terminal = new Terminal({
+        fontSize: settings.fontSize,
+        fontFamily: settings.fontFamily,
+        theme: resolveTerminalTheme(useStore.getState().settings.theme),
+        cursorBlink: true,
+        allowProposedApi: true,
+      })
+      fitAddon = new FitAddon()
+      searchAddon = new SearchAddon()
+      terminal.loadAddon(fitAddon)
+      terminal.loadAddon(searchAddon)
+      terminal.open(container)
+      terminalPool.set(sessionId, { terminal, fitAddon, searchAddon })
+    }
 
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
+    searchAddonRef.current = searchAddon
 
-    const { cols, rows } = terminal
-    registerTerminal(sessionId, cols, rows)
+    // react-resizable-panels v4 may apply panel pixel dimensions in its own useEffect
+    // (which runs outer-to-inner — AFTER this inner effect). Fitting synchronously here
+    // could read dimensions before the panel has its final size, producing wrong col/row
+    // counts. Replay data written at wrong cols causes cursor-positioned UI (status bars,
+    // prompts) to appear at incorrect positions that don't reflow on later resize.
+    // Running fit + replay in a RAF ensures all parent effects have completed and the
+    // browser has performed layout, so the container reports its true pixel dimensions.
+    let disposed = false
+
+    // Fallback fit only for fresh terminals — pool hits already have content and
+    // don't need a safety net to ensure at least one fit fires.
+    const fallbackFitTimer = existing
+      ? undefined
+      : setTimeout(() => { if (!disposed) { try { fitAddon.fit() } catch {} } }, 200)
+
+    requestAnimationFrame(() => {
+      if (disposed) return
+      try { fitAddon.fit() } catch {}
+      terminal.focus()
+
+      const { cols, rows } = terminal
+      registerTerminal(sessionId, cols, rows)
+
+      if (!existing) {
+        replayRequest(sessionId).then(({ chunks }) => {
+          if (disposed) return
+          chunks.forEach((chunk) => terminal.write(chunk))
+          setTerminalReady(sessionId, true)
+        })
+      } else {
+        setTerminalReady(sessionId, true)
+      }
+    })
 
     // Suppress the next DOM paste event when Ctrl+Shift+V already handled it via IPC clipboard.
     // Needed because Chromium/Electron fires a paste DOM event for Ctrl+Shift+V on some platforms.
     let suppressNextPaste = false
 
     // Ctrl+Shift+V → paste via IPC (Linux-compatible); Ctrl+V → handled by paste DOM event below;
-    // Ctrl+C → copy selection if non-empty, otherwise SIGINT
+    // Ctrl+C → copy selection if non-empty, otherwise SIGINT.
+    // Re-called each mount — xterm stores only one custom key handler so this replaces the old one.
     terminal.attachCustomKeyEventHandler((e) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'F' && e.type === 'keydown') {
         setSearchVisible(true)
@@ -317,13 +363,10 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
       return true
     })
 
-    terminal.onData((data) => { writeToSession({ sessionId, data }) })
-    terminal.onResize(({ cols, rows }) => { resizeSession({ sessionId, cols, rows }) })
-
-    replayRequest(sessionId).then(({ chunks }) => {
-      chunks.forEach((chunk) => terminal.write(chunk))
-      setTerminalReady(sessionId, true)
-    })
+    // Per-mount disposables — captured so cleanup can remove them without disposing the terminal.
+    // Without explicit dispose, calling onData/onResize again on a pooled terminal would stack listeners.
+    const dataDisposable = terminal.onData((data) => { writeToSession({ sessionId, data }) })
+    const resizeDisposable = terminal.onResize(({ cols, rows }) => { resizeSession({ sessionId, cols, rows }) })
 
     // Per-chunk line buffer + active capture state (lives in closure across chunks)
     let lineBuffer = ''
@@ -368,7 +411,7 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
 
     // Track the last non-empty selection so Shift+mouseup can read it after xterm finalizes it
     let lastSel = ''
-    terminal.onSelectionChange(() => {
+    const selectionDisposable = terminal.onSelectionChange(() => {
       const s = terminal.getSelection()
       if (s) lastSel = s
     })
@@ -440,13 +483,7 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
     container.addEventListener('paste', handlePaste, true)
 
     const safeRefit = (): void => {
-      try {
-        fitAddonRef.current?.fit()
-        // Force full re-render to clear any rendering artifacts from rapid resize
-        if (terminalRef.current) {
-          terminalRef.current.refresh(0, terminalRef.current.rows - 1)
-        }
-      } catch {}
+      try { fitAddonRef.current?.fit() } catch {}
     }
 
     // Resize observer — skip zero-dimension entries (fired when parent gets display:none)
@@ -460,10 +497,13 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
       })
     })
 
-    // Re-fit when pane becomes visible again (e.g. switching back from projects view)
+    // Re-fit when pane becomes visible again (e.g. switching back from projects view).
+    // Route through rafId so a simultaneous ResizeObserver + visibility change don't
+    // fire two concurrent safeRefit calls.
     const visibilityObserver = new IntersectionObserver((entries) => {
       if (entries[0]?.isIntersecting) {
-        requestAnimationFrame(safeRefit)
+        cancelAnimationFrame(rafId)
+        rafId = requestAnimationFrame(safeRefit)
       }
     })
 
@@ -471,18 +511,34 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
     visibilityObserver.observe(container)
 
     return () => {
+      disposed = true
       cancelAnimationFrame(rafId)
-      clearTimeout(fallbackFitTimer)
+      if (fallbackFitTimer !== undefined) clearTimeout(fallbackFitTimer)
       offData()
+      dataDisposable.dispose()
+      resizeDisposable.dispose()
+      selectionDisposable.dispose()
       observer.disconnect()
       visibilityObserver.disconnect()
       container.removeEventListener('mouseup', handleMouseUp, true)
       container.removeEventListener('contextmenu', handleContextMenu, true)
       container.removeEventListener('paste', handlePaste, true)
-      searchAddon.dispose()
       searchAddonRef.current = null
-      terminal.dispose()
-      unregisterTerminal(sessionId)
+
+      // Detach the xterm element from this container — keeps it alive in the pool so
+      // the next mount can re-parent it without replaying history.
+      if (terminal.element?.parentNode === container) {
+        container.removeChild(terminal.element)
+      }
+
+      // Fully dispose only when the session has been removed from the store (closed,
+      // not just moved to a different layout position).
+      if (!useStore.getState().sessions[sessionId]) {
+        terminalPool.delete(sessionId)
+        searchAddon.dispose()
+        terminal.dispose()
+        unregisterTerminal(sessionId)
+      }
     }
   }, [sessionId])
 
@@ -492,7 +548,6 @@ export function useTerminal(sessionId: string, containerRef: React.RefObject<HTM
       requestAnimationFrame(() => {
         try {
           fitAddonRef.current?.fit()
-          terminalRef.current?.refresh(0, (terminalRef.current?.rows ?? 1) - 1)
           terminalRef.current?.focus()
         } catch {}
       })
