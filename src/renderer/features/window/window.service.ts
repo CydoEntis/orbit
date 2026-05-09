@@ -2,6 +2,10 @@ import { ipc } from '../../lib/ipc'
 import { IPC } from '@shared/ipc-channels'
 import type { DetachTabResponse, WindowControlAction } from '@shared/ipc-types'
 
+export async function detachNotePreview(noteId: string, fromWindowId: string): Promise<{ newWindowId: string }> {
+  return ipc.invoke(IPC.WINDOW_DETACH_NOTE_PREVIEW, { noteId, fromWindowId }) as Promise<{ newWindowId: string }>
+}
+
 export async function getWindowId(): Promise<string> {
   const res = (await ipc.invoke(IPC.WINDOW_GET_ID)) as { windowId: string }
   return res.windowId

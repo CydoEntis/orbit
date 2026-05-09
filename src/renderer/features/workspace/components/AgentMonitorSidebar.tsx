@@ -2,13 +2,15 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { Plus, ChevronDown, ChevronRight, Loader2, FolderOpen, Pencil, X, Users, Trash2, Scissors, ExternalLink, Columns2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { useStore } from '../../../store/root.store'
+import { useLayoutDnd } from '../../layout/dnd/LayoutDndContext'
 import { useProjects } from '../../session/hooks/useProjects'
 import { patchSession, killSession, SESSION_COLORS } from '../../session/session.service'
 import { removeWorktree } from '../../fs/fs.service'
 import { detachTab } from '../../window/window.service'
-import { findTabForSession, collectSessionIds } from '../../terminal/pane-tree'
+import { findTabForSession, collectSessionIds, findNotesLeafIdForNote, makeNotesLeaf } from '../../layout/layout-tree'
 import { useWorktreeStats } from '../hooks/useWorktreeStats'
 import { useConfirmClose } from '../../session/hooks/useConfirmClose'
+import { FileTree } from '../../../components/NoteDrawer'
 import { toast } from 'sonner'
 import { cn } from '../../../lib/utils'
 import { Input } from '../../../components/ui/input'
@@ -183,6 +185,7 @@ interface SessionRowProps {
 }
 
 function SessionRow({ meta, activeSessionId, worktreeStats, isNoWorkspace, dragging, onSelectSession, onEditMeta, onCtxMenu, onDragStart, onDragEnd, paneCount }: SessionRowProps): JSX.Element {
+  const { startDrag, endDrag } = useLayoutDnd()
   const isSelected = activeSessionId === meta.sessionId
   const isRunning = meta.status === 'running'
   const agentStatus = meta.agentStatus ?? 'idle'
@@ -193,9 +196,13 @@ function SessionRow({ meta, activeSessionId, worktreeStats, isNoWorkspace, dragg
 
   return (
     <button
-      draggable={isNoWorkspace}
-      onDragStart={isNoWorkspace ? (e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(meta.sessionId) } : undefined}
-      onDragEnd={isNoWorkspace ? onDragEnd : undefined}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        onDragStart(meta.sessionId)
+        startDrag({ type: 'sidebar-session', sessionId: meta.sessionId })
+      }}
+      onDragEnd={() => { onDragEnd(); endDrag() }}
       onClick={() => onSelectSession(meta.sessionId)}
       onDoubleClick={(e) => { e.stopPropagation(); onEditMeta(meta) }}
       onContextMenu={(e) => { e.preventDefault(); onCtxMenu({ x: e.clientX, y: e.clientY, meta }) }}
@@ -249,9 +256,13 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
   const openGroupInSplits = useStore((s) => s.openGroupInSplits)
   const focusedSessionId = useStore((s) => s.focusedSessionId)
   const setFocusedSession = useStore((s) => s.setFocusedSession)
+  const addTab = useStore((s) => s.addTab)
+  const insertSessionAtRight = useStore((s) => s.insertSessionAtRight)
+  const insertLayoutAtRight = useStore((s) => s.insertLayoutAtRight)
   const sessionGroups = useStore((s) => s.settings.sessionGroups)
   const updateSettings = useStore((s) => s.updateSettings)
 
+  const { startDrag, endDrag } = useLayoutDnd()
   const { openProjects, addProject, removeProject } = useProjects()
   const { requestClose, modal: closeModal } = useConfirmClose()
 
@@ -268,8 +279,13 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null | 'ungrouped'>('ungrouped')
+  const [sessionsOpen, setSessionsOpen] = useState(true)
+  const [notesOpen, setNotesOpen] = useState(false)
+  const [splitPercent, setSplitPercent] = useState(50)
+  const [sidebarActiveNoteId, setSidebarActiveNoteId] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
+  const sidebarBodyRef = useRef<HTMLDivElement>(null)
 
   const isNoWorkspace = activeProject === null
   const normalizedActive = activeProject?.replace(/\\/g, '/')
@@ -307,13 +323,81 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
   }, [normalizedActive, isNoWorkspace])
 
   useEffect(() => {
-    if (!activeSessionId && projectSessions.length > 0) onSelectSession(projectSessions[0].sessionId)
-  }, [projectSessions.length, activeSessionId, onSelectSession])
+    if (!isNoWorkspace && projectSessions.length > 0 && (!activeSessionId || activeSessionId === '__root__')) {
+      onSelectSession(projectSessions[0].sessionId)
+    }
+  }, [projectSessions.length, activeSessionId, isNoWorkspace, onSelectSession])
 
   const resetFooter = (): void => {
     setFooterMode('idle')
     setNewGroupName(''); setNewGroupColor(GROUP_COLORS[0])
   }
+
+  useEffect(() => {
+    setSidebarActiveNoteId(null)
+    const handler = (e: Event): void => {
+      const { noteId, tabId } = (e as CustomEvent<{ noteId: string; tabId: string }>).detail
+      if (tabId === activeSessionId) setSidebarActiveNoteId(noteId)
+    }
+    document.addEventListener('acc:note-active-changed', handler)
+    return () => document.removeEventListener('acc:note-active-changed', handler)
+  }, [activeSessionId])
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent): void => {
+    e.preventDefault()
+    const body = sidebarBodyRef.current
+    if (!body) return
+    const bodyRect = body.getBoundingClientRect()
+    const onMove = (ev: MouseEvent): void => {
+      const relY = ev.clientY - bodyRect.top
+      setSplitPercent(Math.min(80, Math.max(20, (relY / bodyRect.height) * 100)))
+    }
+    const onUp = (): void => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [])
+
+  const handleSidebarNoteActivate = useCallback((noteId: string): void => {
+    const s = useStore.getState()
+    const tabId = (activeSessionId && s.paneTree[activeSessionId]) ? activeSessionId : '__root__'
+    const tree = s.paneTree[tabId]
+    if (!tree) return
+
+    if (tree.type === 'leaf' && tree.panel === 'home') {
+      const newLeaf = makeNotesLeaf(noteId)
+      s.replaceLayoutLeaf(tabId, tree.id, newLeaf)
+      setTimeout(() => {
+        document.dispatchEvent(new CustomEvent('acc:activate-note', { detail: { noteId, tabId, leafId: newLeaf.id } }))
+      }, 50)
+      return
+    }
+
+    const existingLeafId = findNotesLeafIdForNote(tree, noteId)
+    if (existingLeafId) {
+      document.dispatchEvent(new CustomEvent('acc:activate-note', { detail: { noteId, tabId, leafId: existingLeafId } }))
+      return
+    }
+
+    const newLeaf = makeNotesLeaf(noteId)
+    insertLayoutAtRight(tabId, newLeaf)
+    setTimeout(() => {
+      document.dispatchEvent(new CustomEvent('acc:activate-note', { detail: { noteId, tabId, leafId: newLeaf.id } }))
+    }, 50)
+  }, [activeSessionId, insertLayoutAtRight])
+
+  const handleNewNote = useCallback((): void => {
+    if (activeSessionId) {
+      const state = useStore.getState()
+      const tree = state.paneTree[activeSessionId]
+      if (tree && !findNotesLeafId(tree)) state.toggleNotesPane(activeSessionId)
+    }
+    setTimeout(() => {
+      document.dispatchEvent(new CustomEvent('acc:new-note'))
+    }, 50)
+  }, [activeSessionId])
 
   const handleDrop = useCallback(async (targetGroupId: string | null) => {
     if (!draggedSessionId) return
@@ -394,17 +478,24 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
     : normalizedActive ? normalizedActive.split('/').filter(Boolean).pop() ?? normalizedActive
     : 'No Workspace'
 
-  const resolveTabId = useCallback((sessionId: string): string =>
-    findTabForSession(paneTree, sessionId) ?? sessionId,
-    [paneTree]
-  )
-
   const effectiveActiveId = useMemo(() => {
     if (!activeSessionId || !focusedSessionId) return activeSessionId
     const tree = paneTree[activeSessionId]
     if (tree && collectSessionIds(tree).includes(focusedSessionId)) return focusedSessionId
     return activeSessionId
   }, [activeSessionId, focusedSessionId, paneTree])
+
+  const handleSessionSelect = useCallback((sessionId: string): void => {
+    const tabId = findTabForSession(paneTree, sessionId)
+    if (tabId) {
+      onSelectSession(tabId)
+      setFocusedSession(sessionId)
+    } else if (activeSessionId && activeSessionId !== '__root__') {
+      insertSessionAtRight(activeSessionId, sessionId)
+    } else {
+      addTab(sessionId)
+    }
+  }, [paneTree, onSelectSession, setFocusedSession, addTab, insertSessionAtRight, activeSessionId])
 
   const renderSessionRow = (meta: SessionMeta): JSX.Element => (
     <SessionRow
@@ -414,7 +505,7 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
       worktreeStats={worktreeStats}
       isNoWorkspace={isNoWorkspace}
       dragging={draggedSessionId === meta.sessionId}
-      onSelectSession={() => { onSelectSession(resolveTabId(meta.sessionId)); setFocusedSession(meta.sessionId) }}
+      onSelectSession={() => handleSessionSelect(meta.sessionId)}
       onEditMeta={setEditMeta}
       onCtxMenu={setCtxMenu}
       onDragStart={setDraggedSessionId}
@@ -427,6 +518,103 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
     onDragLeave: () => setDragOverGroupId(null),
     onDrop: (e: React.DragEvent) => { e.preventDefault(); void handleDrop(groupId) },
   })
+
+  const sessionListContent = (
+    <>
+      {projectSessions.length === 0 && isRestoringLayout && (
+        <div className="flex flex-col gap-0.5 py-1">
+          {[0.85, 0.65, 0.75].map((w, i) => (
+            <div key={i} className="flex flex-col gap-1 px-3 py-2 border-l-2 border-transparent">
+              <div className="flex items-center gap-2">
+                <Skeleton className="w-1.5 h-1.5 rounded-full flex-shrink-0" />
+                <Skeleton className="h-2.5 rounded" style={{ width: `${w * 100}%` }} />
+              </div>
+              <Skeleton className="h-2 rounded ml-3.5" style={{ width: `${(w * 0.7) * 100}%` }} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {projectSessions.length === 0 && !isRestoringLayout && (
+        <p className="text-xs text-zinc-600 text-center mt-6 px-4">No sessions yet</p>
+      )}
+
+      {grouped ? (
+        <>
+          <div
+            {...makeDropZone(null)}
+            className={cn('min-h-[4px] transition-colors', dragOverGroupId === 'ungrouped' && draggedSessionId && 'bg-brand-accent/10')}
+          >
+            {grouped.ungrouped.map(renderSessionRow)}
+          </div>
+
+          {sessionGroups.map((g) => {
+            const isCollapsed = collapsedGroups.has(g.id)
+            const groupSessions = grouped.byGroup[g.id] ?? []
+            const splitChildren = groupSessions.filter((s) => /^Split #\d+$/.test(s.name))
+            const isSplitGroup = splitChildren.length > 0
+            const displaySessions = isSplitGroup
+              ? groupSessions.filter((s) => !/^Split #\d+$/.test(s.name))
+              : groupSessions
+            const splitPaneCount = isSplitGroup ? groupSessions.length : undefined
+            const toggleCollapsed = (): void => setCollapsedGroups((prev) => {
+              const next = new Set(prev)
+              if (next.has(g.id)) next.delete(g.id)
+              else next.add(g.id)
+              return next
+            })
+            return (
+              <div
+                key={g.id}
+                {...makeDropZone(g.id)}
+                className={cn('transition-colors rounded-sm', dragOverGroupId === g.id && draggedSessionId && 'bg-brand-accent/10')}
+              >
+                <div
+                  className="flex items-center gap-2 px-2 py-2 mx-1 rounded cursor-pointer select-none hover:bg-brand-panel/50 transition-colors"
+                  onClick={toggleCollapsed}
+                  onContextMenu={(e) => { e.preventDefault(); setGroupCtxMenu({ x: e.clientX, y: e.clientY, group: g }) }}
+                >
+                  <ChevronRight
+                    size={12}
+                    className={cn('flex-shrink-0 text-zinc-600 transition-transform duration-150', !isCollapsed && 'rotate-90')}
+                  />
+                  <span className="w-2.5 h-2.5 flex-shrink-0" style={{ backgroundColor: g.color ?? '#6366f1', borderRadius: '3px' }} />
+                  <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider truncate flex-1">{g.name}</span>
+                  {isCollapsed && displaySessions.length > 0 && (
+                    <span className="text-[10px] text-zinc-600 font-medium tabular-nums flex-shrink-0">{displaySessions.length}</span>
+                  )}
+                </div>
+                {!isCollapsed && (
+                  displaySessions.length === 0
+                    ? <p className="px-7 pb-1.5 text-[10px] text-zinc-700 italic">Drag sessions here</p>
+                    : <div className="ml-5 border-l border-zinc-800">
+                        {displaySessions.map((meta) => (
+                          <SessionRow
+                            key={meta.sessionId}
+                            meta={meta}
+                            activeSessionId={effectiveActiveId}
+                            worktreeStats={worktreeStats}
+                            isNoWorkspace={isNoWorkspace}
+                            dragging={draggedSessionId === meta.sessionId}
+                            onSelectSession={() => handleSessionSelect(meta.sessionId)}
+                            onEditMeta={setEditMeta}
+                            onCtxMenu={setCtxMenu}
+                            onDragStart={setDraggedSessionId}
+                            onDragEnd={() => setDraggedSessionId(null)}
+                            paneCount={splitPaneCount}
+                          />
+                        ))}
+                      </div>
+                )}
+              </div>
+            )
+          })}
+        </>
+      ) : (
+        projectSessions.map(renderSessionRow)
+      )}
+    </>
+  )
 
   return (
     <div className="flex flex-col h-full bg-brand-bg w-full">
@@ -444,7 +632,7 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
               className="flex items-center justify-center w-7 h-7 rounded hover:bg-red-500/10 text-zinc-600 hover:text-red-400 transition-colors flex-shrink-0"
               title="Close project"
             >
-              <Trash2 size={13} />
+              <X size={13} />
             </button>
           )}
         </div>
@@ -484,102 +672,106 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
         )}
       </div>
 
-      {/* Session list */}
-      <div className="flex-1 overflow-y-auto min-h-0 py-1">
-        {projectSessions.length === 0 && isRestoringLayout && (
-          <div className="flex flex-col gap-0.5 py-1">
-            {[0.85, 0.65, 0.75].map((w, i) => (
-              <div key={i} className="flex flex-col gap-1 px-3 py-2 border-l-2 border-transparent">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="w-1.5 h-1.5 rounded-full flex-shrink-0" />
-                  <Skeleton className="h-2.5 rounded" style={{ width: `${w * 100}%` }} />
-                </div>
-                <Skeleton className="h-2 rounded ml-3.5" style={{ width: `${(w * 0.7) * 100}%` }} />
-              </div>
+      {/* Body: Sessions section + Notes section */}
+      <div className="flex flex-col flex-1 min-h-0" ref={sidebarBodyRef}>
+
+        {/* ── Sessions section ── */}
+        <div
+          className={cn('flex flex-col min-h-0', !sessionsOpen && 'flex-shrink-0')}
+          style={sessionsOpen
+            ? (notesOpen ? { flex: `0 0 ${splitPercent}%` } : { flex: '1 1 0' })
+            : undefined}
+        >
+          {/* Sessions header */}
+          <div
+            className="flex-shrink-0 flex items-center gap-0.5 px-3 py-1.5 border-b border-brand-panel/40 cursor-pointer hover:bg-brand-panel/30 transition-colors select-none"
+            onClick={() => setSessionsOpen((v) => !v)}
+          >
+            <ChevronRight
+              size={10}
+              className={cn('flex-shrink-0 text-zinc-600 transition-transform duration-150', sessionsOpen && 'rotate-90')}
+            />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 flex-1">Sessions</span>
+            {sessionsOpen && (isNoWorkspace ? (
+              <>
+                <button
+                  onClick={(e) => { e.stopPropagation(); document.dispatchEvent(new CustomEvent('acc:new-session')) }}
+                  className="p-1 text-zinc-600 hover:text-zinc-300 rounded hover:bg-brand-panel/60 transition-colors"
+                  title="New Session"
+                >
+                  <Plus size={12} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setFooterMode('newGroup') }}
+                  className="p-1 text-zinc-600 hover:text-zinc-300 rounded hover:bg-brand-panel/60 transition-colors"
+                  title="New Group"
+                >
+                  <Users size={12} />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); document.dispatchEvent(new CustomEvent('acc:new-task', { detail: { projectPath: activeProject } })) }}
+                className="p-1 text-zinc-600 hover:text-zinc-300 rounded hover:bg-brand-panel/60 transition-colors"
+                title="New Task"
+              >
+                <Plus size={12} />
+              </button>
             ))}
           </div>
-        )}
 
-        {projectSessions.length === 0 && !isRestoringLayout && (
-          <p className="text-xs text-zinc-600 text-center mt-6 px-4">No sessions yet</p>
-        )}
-
-        {grouped ? (
-          <>
-            {/* Ungrouped drop zone */}
-            <div
-              {...makeDropZone(null)}
-              className={cn('min-h-[4px] transition-colors', dragOverGroupId === 'ungrouped' && draggedSessionId && 'bg-brand-accent/10')}
-            >
-              {grouped.ungrouped.map(renderSessionRow)}
+          {/* Sessions list */}
+          {sessionsOpen && (
+            <div className="flex-1 overflow-y-auto min-h-0 py-1">
+              {sessionListContent}
             </div>
+          )}
+        </div>
 
-            {/* Groups */}
-            {sessionGroups.map((g) => {
-              const isCollapsed = collapsedGroups.has(g.id)
-              const groupSessions = grouped.byGroup[g.id] ?? []
-              const splitChildren = groupSessions.filter((s) => /^Split #\d+$/.test(s.name))
-              const isSplitGroup = splitChildren.length > 0
-              const displaySessions = isSplitGroup
-                ? groupSessions.filter((s) => !/^Split #\d+$/.test(s.name))
-                : groupSessions
-              const splitPaneCount = isSplitGroup ? groupSessions.length : undefined
-              const toggleCollapsed = (): void => setCollapsedGroups((prev) => {
-                const next = new Set(prev)
-                if (next.has(g.id)) next.delete(g.id)
-                else next.add(g.id)
-                return next
-              })
-              return (
-                <div
-                  key={g.id}
-                  {...makeDropZone(g.id)}
-                  className={cn('transition-colors rounded-sm', dragOverGroupId === g.id && draggedSessionId && 'bg-brand-accent/10')}
-                >
-                  <div
-                    className="flex items-center gap-2 px-2 py-2 mx-1 rounded cursor-pointer select-none hover:bg-brand-panel/50 transition-colors"
-                    onClick={toggleCollapsed}
-                    onContextMenu={(e) => { e.preventDefault(); setGroupCtxMenu({ x: e.clientX, y: e.clientY, group: g }) }}
-                  >
-                    <ChevronRight
-                      size={12}
-                      className={cn('flex-shrink-0 text-zinc-600 transition-transform duration-150', !isCollapsed && 'rotate-90')}
-                    />
-                    <span className="w-2.5 h-2.5 flex-shrink-0" style={{ backgroundColor: g.color ?? '#6366f1', borderRadius: '3px' }} />
-                    <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider truncate flex-1">{g.name}</span>
-                    {isCollapsed && displaySessions.length > 0 && (
-                      <span className="text-[10px] text-zinc-600 font-medium tabular-nums flex-shrink-0">{displaySessions.length}</span>
-                    )}
-                  </div>
-                  {!isCollapsed && (
-                    displaySessions.length === 0
-                      ? <p className="px-7 pb-1.5 text-[10px] text-zinc-700 italic">Drag sessions here</p>
-                      : <div className="ml-5 border-l border-zinc-800">
-                          {displaySessions.map((meta) => (
-                            <SessionRow
-                              key={meta.sessionId}
-                              meta={meta}
-                              activeSessionId={effectiveActiveId}
-                              worktreeStats={worktreeStats}
-                              isNoWorkspace={isNoWorkspace}
-                              dragging={draggedSessionId === meta.sessionId}
-                              onSelectSession={() => { onSelectSession(resolveTabId(meta.sessionId)); setFocusedSession(meta.sessionId) }}
-                              onEditMeta={setEditMeta}
-                              onCtxMenu={setCtxMenu}
-                              onDragStart={setDraggedSessionId}
-                              onDragEnd={() => setDraggedSessionId(null)}
-                              paneCount={splitPaneCount}
-                            />
-                          ))}
-                        </div>
-                  )}
-                </div>
-              )
-            })}
-          </>
-        ) : (
-          projectSessions.map(renderSessionRow)
+        {/* Resize handle — only when both sections open */}
+        {notesOpen && sessionsOpen && (
+          <div
+            className="h-1 flex-shrink-0 bg-brand-panel/60 hover:bg-brand-accent transition-colors cursor-row-resize"
+            onMouseDown={handleResizeMouseDown}
+          />
         )}
+
+        {/* ── Notes section ── */}
+        <div className={cn('flex flex-col flex-shrink-0', notesOpen && 'flex-1 min-h-0')}>
+          {/* Notes header */}
+          <div
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 border-t border-brand-panel/40 cursor-pointer hover:bg-brand-panel/30 transition-colors select-none"
+            onClick={() => setNotesOpen((v) => !v)}
+          >
+            <ChevronRight
+              size={10}
+              className={cn('flex-shrink-0 text-zinc-600 transition-transform duration-150', notesOpen && 'rotate-90')}
+            />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 flex-1">Notes</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleNewNote() }}
+              className="p-1 text-zinc-600 hover:text-zinc-300 rounded hover:bg-brand-panel/60 transition-colors"
+              title="New Note (Ctrl+Shift+N)"
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+
+          {/* Notes file tree */}
+          {notesOpen && (
+            <div className="flex-1 min-h-0 relative overflow-hidden">
+              <div className="absolute inset-0">
+                <FileTree
+                  activeNoteId={sidebarActiveNoteId}
+                  onActivate={handleSidebarNoteActivate}
+                  onCreate={handleNewNote}
+                  onNoteDragStart={(noteId) => startDrag({ type: 'sidebar-notes', noteId })}
+                  onNoteDragEnd={endDrag}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Context menu */}
@@ -633,7 +825,7 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
             )}
             <div className="my-1 border-t border-brand-panel/60" />
             <button onMouseDown={(e) => { e.stopPropagation(); handleCloseSession(ctxMenu.meta); setCtxMenu(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-red-400 hover:bg-brand-panel hover:text-red-300 transition-colors">
-              <X size={12} />Close Session
+              <Trash2 size={12} />Kill Session
             </button>
           </div>
         </>,
@@ -697,66 +889,37 @@ export function AgentMonitorSidebar({ activeProject, onProjectChange, activeSess
         document.body
       )}
 
-      {/* Footer */}
-      <div className="flex-shrink-0 border-t border-brand-panel/60 p-2">
-        {footerMode === 'idle' && (
-          isNoWorkspace ? (
-            <div className="flex gap-1.5">
-              <button
-                onClick={() => document.dispatchEvent(new CustomEvent('acc:new-session'))}
-                className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-zinc-500 hover:bg-brand-panel hover:text-brand-muted transition-colors rounded"
-              >
-                <Plus size={13} />New Session
-              </button>
-              <button
-                onClick={() => setFooterMode('newGroup')}
-                className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-zinc-500 hover:bg-brand-panel hover:text-brand-muted transition-colors rounded"
-              >
-                <Users size={12} />New Group
-              </button>
+      {/* New Group modal */}
+      {footerMode === 'newGroup' && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center" onMouseDown={(e) => { if (e.target === e.currentTarget) resetFooter() }}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative bg-brand-surface border border-brand-panel/60 rounded-lg shadow-2xl w-72 p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-zinc-200">New Group</span>
+              <button onClick={resetFooter} className="text-zinc-500 hover:text-zinc-300 transition-colors"><X size={14} /></button>
             </div>
-          ) : (
-            <button
-              onClick={() => document.dispatchEvent(new CustomEvent('acc:new-task', { detail: { projectPath: activeProject } }))}
-              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-zinc-500 hover:bg-brand-panel hover:text-brand-muted transition-colors rounded"
-            >
-              <Plus size={13} />New Task
-            </button>
-          )
-        )}
-
-        {footerMode === 'newGroup' && createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center" onMouseDown={(e) => { if (e.target === e.currentTarget) resetFooter() }}>
-            <div className="absolute inset-0 bg-black/50" />
-            <div className="relative bg-brand-surface border border-brand-panel/60 rounded-lg shadow-2xl w-72 p-5 flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-zinc-200">New Group</span>
-                <button onClick={resetFooter} className="text-zinc-500 hover:text-zinc-300 transition-colors"><X size={14} /></button>
-              </div>
-              <Input
-                ref={nameInputRef}
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !creating) void handleCreateGroup(); if (e.key === 'Escape') resetFooter() }}
-                placeholder="group name"
-              />
-              <div className="flex gap-2 flex-wrap">
-                {GROUP_COLORS.map((c) => (
-                  <button key={c} onClick={() => setNewGroupColor(c)} style={{ backgroundColor: c }} className={cn('w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0', newGroupColor === c && 'ring-2 ring-white ring-offset-2 ring-offset-brand-surface scale-110')} />
-                ))}
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button variant="ghost" size="sm" onClick={resetFooter}>Cancel</Button>
-                <Button size="sm" onClick={() => void handleCreateGroup()} disabled={creating || !newGroupName.trim()} className="bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 disabled:opacity-40">
-                  {creating ? <Loader2 size={11} className="animate-spin inline" /> : 'Create'}
-                </Button>
-              </div>
+            <Input
+              ref={nameInputRef}
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !creating) void handleCreateGroup(); if (e.key === 'Escape') resetFooter() }}
+              placeholder="group name"
+            />
+            <div className="flex gap-2 flex-wrap">
+              {GROUP_COLORS.map((c) => (
+                <button key={c} onClick={() => setNewGroupColor(c)} style={{ backgroundColor: c }} className={cn('w-7 h-7 rounded-full transition-transform hover:scale-110 flex-shrink-0', newGroupColor === c && 'ring-2 ring-white ring-offset-2 ring-offset-brand-surface scale-110')} />
+              ))}
             </div>
-          </div>,
-          document.body
-        )}
-
-      </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="ghost" size="sm" onClick={resetFooter}>Cancel</Button>
+              <Button size="sm" onClick={() => void handleCreateGroup()} disabled={creating || !newGroupName.trim()} className="bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 disabled:opacity-40">
+                {creating ? <Loader2 size={11} className="animate-spin inline" /> : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

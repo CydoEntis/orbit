@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { X, Eye, Code, Columns2, LayoutList, Plus, Search, ChevronRight, FolderOpen, FolderClosed, FileText, FolderPlus, PanelRight, PanelRightOpen } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { X, Eye, Code, Columns2, Plus, Search, ChevronRight, FolderOpen, FolderClosed, FileText, FolderPlus } from 'lucide-react'
 import { marked } from 'marked'
 import { useStore } from '../store/root.store'
 import { cn } from '../lib/utils'
@@ -38,9 +39,11 @@ interface FileTreeProps {
   activeNoteId: string | null
   onActivate: (id: string) => void
   onCreate: () => void
+  onNoteDragStart?: (noteId: string) => void
+  onNoteDragEnd?: () => void
 }
 
-function FileTree({ activeNoteId, onActivate, onCreate }: FileTreeProps): JSX.Element {
+export function FileTree({ activeNoteId, onActivate, onCreate, onNoteDragStart, onNoteDragEnd }: FileTreeProps): JSX.Element {
   const notes = useStore((s) => s.notes)
   const noteFolders = useStore((s) => s.settings.noteFolders ?? [])
   const noteFolderMap = useStore((s) => s.settings.noteFolderMap ?? {})
@@ -56,6 +59,7 @@ function FileTree({ activeNoteId, onActivate, onCreate }: FileTreeProps): JSX.El
   const [dragNoteId, setDragNoteId] = useState<string | null>(null)
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{ type: 'folder' | 'note'; id: string; x: number; y: number } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'folder' | 'note'; id: string } | null>(null)
   const [renamingNoteId, setRenamingNoteId] = useState<string | null>(null)
   const [renamingNoteName, setRenamingNoteName] = useState('')
   // null id = new folder, string id = edit existing
@@ -188,8 +192,8 @@ function FileTree({ activeNoteId, onActivate, onCreate }: FileTreeProps): JSX.El
                 <button
                   key={note.id}
                   draggable
-                  onDragStart={() => setDragNoteId(note.id)}
-                  onDragEnd={() => { setDragNoteId(null); setDragOverFolderId(null) }}
+                  onDragStart={() => { setDragNoteId(note.id); onNoteDragStart?.(note.id) }}
+                  onDragEnd={() => { setDragNoteId(null); setDragOverFolderId(null); onNoteDragEnd?.() }}
                   onClick={() => onActivate(note.id)}
                   onContextMenu={(e) => handleContextMenu(e, 'note', note.id)}
                   style={isActive ? { background: `linear-gradient(to right, ${nc}22, transparent)`, borderLeftColor: nc } : undefined}
@@ -257,8 +261,8 @@ function FileTree({ activeNoteId, onActivate, onCreate }: FileTreeProps): JSX.El
                           <button
                             key={note.id}
                             draggable
-                            onDragStart={() => setDragNoteId(note.id)}
-                            onDragEnd={() => { setDragNoteId(null); setDragOverFolderId(null) }}
+                            onDragStart={() => { setDragNoteId(note.id); onNoteDragStart?.(note.id) }}
+                            onDragEnd={() => { setDragNoteId(null); setDragOverFolderId(null); onNoteDragEnd?.() }}
                             onClick={() => onActivate(note.id)}
                             onContextMenu={(e) => handleContextMenu(e, 'note', note.id)}
                             style={isActive ? { background: `linear-gradient(to right, ${nc}22, transparent)`, borderLeftColor: nc } : undefined}
@@ -309,7 +313,7 @@ function FileTree({ activeNoteId, onActivate, onCreate }: FileTreeProps): JSX.El
                 </button>
                 <button
                   className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-brand-panel hover:text-red-300 transition-colors"
-                  onClick={() => { void deleteNoteFolder(contextMenu.id); setContextMenu(null) }}
+                  onClick={() => { setDeleteConfirm({ type: 'folder', id: contextMenu.id }); setContextMenu(null) }}
                 >
                   Delete
                 </button>
@@ -324,7 +328,7 @@ function FileTree({ activeNoteId, onActivate, onCreate }: FileTreeProps): JSX.El
                 </button>
                 <button
                   className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-brand-panel hover:text-red-300 transition-colors"
-                  onClick={() => { void deleteNote(contextMenu.id); setContextMenu(null) }}
+                  onClick={() => { setDeleteConfirm({ type: 'note', id: contextMenu.id }); setContextMenu(null) }}
                 >
                   Delete
                 </button>
@@ -384,6 +388,48 @@ function FileTree({ activeNoteId, onActivate, onCreate }: FileTreeProps): JSX.El
           </div>
         </>
       )}
+      {deleteConfirm && (() => {
+        const isFolder = deleteConfirm.type === 'folder'
+        const folder = noteFolders.find(f => f.id === deleteConfirm.id)
+        const note = notes.find(n => n.id === deleteConfirm.id)
+        const label = isFolder ? (folder?.name ?? 'this folder') : noteTitle(note ?? { id: '', content: '', updatedAt: 0 })
+        const subtext = isFolder ? 'Notes inside will become unfiled.' : 'This cannot be undone.'
+        const confirmLabel = isFolder ? 'Delete Folder' : 'Delete Note'
+        const onConfirm = (): void => {
+          if (isFolder) void deleteNoteFolder(deleteConfirm.id)
+          else void deleteNote(deleteConfirm.id)
+          setDeleteConfirm(null)
+        }
+        return createPortal(
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setDeleteConfirm(null) }}
+          >
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative bg-brand-surface border border-brand-panel/60 rounded-lg shadow-2xl w-80 p-5 flex flex-col gap-4">
+              <span className="text-sm font-semibold text-zinc-200">Confirm Delete</span>
+              <p className="text-xs text-zinc-400">
+                Delete <span className="text-zinc-200 font-medium">{label}</span>? {subtext}
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors rounded border border-brand-panel hover:border-zinc-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={onConfirm}
+                  className="px-3 py-1.5 text-xs bg-red-600/20 text-red-400 border border-red-600/30 hover:bg-red-600/30 hover:text-red-300 transition-colors rounded"
+                >
+                  {confirmLabel}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      })()}
     </div>
   )
 }
@@ -391,20 +437,14 @@ function FileTree({ activeNoteId, onActivate, onCreate }: FileTreeProps): JSX.El
 // ─── Main drawer ──────────────────────────────────────────────────────────────
 
 export interface NoteDrawerProps {
-  open: boolean
   onClose: () => void
   activeNoteId: string | null
   onActivate: (id: string) => void
   onCreate: () => void
-  expanded: boolean
-  onToggleExpand: () => void
-  onToggleMode?: () => void
-  isSplitMode?: boolean
+  onOpenPreview?: () => void
 }
 
-export function NoteDrawer({
-  open, onClose, activeNoteId, onActivate, onCreate, expanded, onToggleExpand, onToggleMode, isSplitMode
-}: NoteDrawerProps): JSX.Element | null {
+export function NoteDrawer({ onClose, activeNoteId, onActivate, onCreate, onOpenPreview }: NoteDrawerProps): JSX.Element {
   const notes = useStore((s) => s.notes)
   const saveNote = useStore((s) => s.saveNote)
 
@@ -414,8 +454,8 @@ export function NoteDrawer({
 
   const [showTree, setShowTree] = useState(false)
   const [treeWidth, setTreeWidth] = useState(240)
-  const [drawerWidth, setDrawerWidth] = useState(600)
   const [editorMode, setEditorMode] = useState<'raw' | 'split' | 'preview'>('raw')
+  const [headerCtxPos, setHeaderCtxPos] = useState<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
@@ -433,6 +473,7 @@ export function NoteDrawer({
     document.addEventListener('keydown', handler, { capture: true })
     return () => document.removeEventListener('keydown', handler, { capture: true })
   }, [])
+
   const [displayContent, setDisplayContent] = useState(activeNote?.content ?? '')
   const localContentRef = useRef(activeNote?.content ?? '')
   const prevIdRef = useRef<string | null>(activeNote?.id ?? null)
@@ -442,8 +483,8 @@ export function NoteDrawer({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    if (open) requestAnimationFrame(() => textareaRef.current?.focus())
-  }, [open])
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [])
 
   const flushSave = useCallback((id: string, content: string): void => {
     saveNote(id, content)
@@ -480,29 +521,21 @@ export function NoteDrawer({
     debounceRef.current = setTimeout(() => { if (eid) flushSave(eid, value) }, 400)
   }
 
-  const handleActivate = (id: string): void => {
-    onActivate(id)
-  }
-
-  const handleCreate = (): void => {
-    onCreate()
-  }
-
-  if (!open && !expanded) return null
-
-  const drawerContent = (
-    <div className="flex h-full w-full bg-brand-bg">
+  return (
+    <div
+      className="flex h-full w-full bg-brand-bg"
+      onContextMenu={(e) => { e.preventDefault(); setHeaderCtxPos({ x: e.clientX, y: e.clientY }) }}
+    >
       {/* File tree — slides in on the left */}
       {showTree && (
         <>
           <div style={{ width: treeWidth }} className="flex-shrink-0 flex flex-col min-h-0">
             <FileTree
               activeNoteId={activeNoteId}
-              onActivate={handleActivate}
-              onCreate={handleCreate}
+              onActivate={onActivate}
+              onCreate={onCreate}
             />
           </div>
-          {/* Standalone divider — sits between tree and editor in the flex row */}
           <div
             className="w-1 flex-shrink-0 bg-zinc-700 hover:bg-brand-accent transition-colors"
             style={{ cursor: 'col-resize' }}
@@ -531,38 +564,13 @@ export function NoteDrawer({
           <span className="text-xs text-zinc-300 truncate flex-1 min-w-0">
             {activeNote ? noteTitle(activeNote) : 'Notes'}
           </span>
-          {activeNote && (
-            <button
-              onClick={() => setEditorMode(m => m === 'raw' ? 'split' : m === 'split' ? 'preview' : 'raw')}
-              className="text-zinc-400 hover:text-zinc-100 transition-colors flex-shrink-0"
-              title={editorMode === 'raw' ? 'Split preview (Ctrl+Shift+M)' : editorMode === 'split' ? 'Preview only' : 'Edit'}
-            >
-              {editorMode === 'raw' ? <Columns2 size={15} /> : editorMode === 'split' ? <Eye size={15} /> : <Code size={15} />}
-            </button>
-          )}
-          {onToggleMode && (
-            <button
-              onClick={onToggleMode}
-              className="text-zinc-400 hover:text-zinc-100 transition-colors flex-shrink-0"
-              title={isSplitMode ? 'Switch to overlay' : 'Switch to split'}
-            >
-              {isSplitMode ? <PanelRight size={15} /> : <PanelRightOpen size={15} />}
-            </button>
-          )}
-          <button
-            onClick={onToggleExpand}
-            className="text-zinc-400 hover:text-zinc-100 transition-colors flex-shrink-0"
-            title="Close notes"
-          >
-            <X size={15} />
-          </button>
         </div>
 
         {/* Editor body */}
         {notes.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
             <p className="text-xs text-zinc-600">No notes yet</p>
-            <button onClick={handleCreate} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Create one →</button>
+            <button onClick={onCreate} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Create one →</button>
           </div>
         ) : !activeNote ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
@@ -599,57 +607,35 @@ export function NoteDrawer({
           />
         )}
 
-        {/* Floating tree toggle */}
-        <button
-          onClick={() => setShowTree(v => !v)}
-          title={showTree ? 'Hide file tree' : 'Browse notes'}
-          className={cn(
-            'absolute bottom-4 right-4 w-9 h-9 rounded-lg flex items-center justify-center shadow-lg border transition-colors',
-            showTree
-              ? 'bg-brand-panel border-brand-muted/30 text-brand-muted hover:bg-brand-panel/80'
-              : 'bg-brand-panel border-brand-panel/60 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600'
-          )}
-        >
-          <LayoutList size={15} />
-        </button>
       </div>
-    </div>
-  )
 
-  if (expanded) return (
-    <div className="h-full w-full">
-      {drawerContent}
+      {headerCtxPos && createPortal(
+        <>
+          <div className="fixed inset-0 z-[9998]" onMouseDown={() => setHeaderCtxPos(null)} />
+          <div
+            className="fixed z-[9999] bg-brand-surface border border-brand-panel/60 rounded-md shadow-2xl py-1 w-44"
+            style={{ left: Math.min(headerCtxPos.x, window.innerWidth - 176), top: Math.min(headerCtxPos.y, window.innerHeight - 80) }}
+          >
+            {activeNote && onOpenPreview && (
+              <button
+                onMouseDown={(e) => { e.stopPropagation(); setHeaderCtxPos(null); onOpenPreview() }}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors"
+              >
+                <Eye size={12} />
+                Preview Markdown
+              </button>
+            )}
+            <button
+              onMouseDown={(e) => { e.stopPropagation(); setHeaderCtxPos(null); onClose() }}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-zinc-300 hover:bg-brand-panel hover:text-zinc-100 transition-colors"
+            >
+              <X size={12} />
+              Close
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
     </div>
-  )
-
-  return (
-    <>
-      <div className="fixed inset-0 z-[90]" onClick={onClose} />
-      <div
-        className="fixed top-0 right-0 bottom-0 z-[91] border-l border-brand-panel shadow-2xl"
-        style={{ width: drawerWidth }}
-      >
-        {drawerContent}
-      </div>
-      {/* Resize handle for the whole panel — z-92 so it sits above everything, right-positioned so it tracks the panel border on window resize */}
-      <div
-        className="fixed top-0 bottom-0 z-[92]"
-        style={{ right: drawerWidth - 4, width: 8, cursor: 'col-resize' }}
-        onMouseDown={(e) => {
-          e.preventDefault()
-          const startX = e.clientX
-          const startWidth = drawerWidth
-          const onMove = (ev: MouseEvent): void => {
-            setDrawerWidth(Math.min(window.innerWidth - 320, Math.max(320, startWidth + startX - ev.clientX)))
-          }
-          const onUp = (): void => {
-            document.removeEventListener('mousemove', onMove)
-            document.removeEventListener('mouseup', onUp)
-          }
-          document.addEventListener('mousemove', onMove)
-          document.addEventListener('mouseup', onUp)
-        }}
-      />
-    </>
   )
 }

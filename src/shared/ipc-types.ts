@@ -111,9 +111,22 @@ export type DetachTabResponse = z.infer<typeof DetachTabResponseSchema>
 
 export const WindowInitialSessionsPayloadSchema = z.object({
   sessionIds: z.array(z.string().uuid()),
-  windowId: z.string()
+  windowId: z.string(),
+  isMainWindow: z.boolean().optional()
 })
 export type WindowInitialSessionsPayload = z.infer<typeof WindowInitialSessionsPayloadSchema>
+
+export const DetachNotePreviewPayloadSchema = z.object({
+  noteId: z.string(),
+  fromWindowId: z.string()
+})
+export type DetachNotePreviewPayload = z.infer<typeof DetachNotePreviewPayloadSchema>
+
+export const WindowInitialNotePreviewPayloadSchema = z.object({
+  noteId: z.string(),
+  windowId: z.string()
+})
+export type WindowInitialNotePreviewPayload = z.infer<typeof WindowInitialNotePreviewPayloadSchema>
 
 export const WindowControlActionSchema = z.enum(['minimize', 'maximize', 'close'])
 export type WindowControlAction = z.infer<typeof WindowControlActionSchema>
