@@ -316,13 +316,25 @@ export function registerFsIpc(): void {
       catch { break }
     }
 
+    const alreadyUsed = (stderr: string): string | null => {
+      const m = /already used by worktree at '([^']+)'/.exec(stderr)
+      return m ? m[1] : null
+    }
+
     try {
       await execAsync(`git worktree add "${worktreePath}" -b "${branchName}"`, { cwd: projectRoot })
     } catch (err: unknown) {
       const msg = (err as any).stderr as string ?? String(err)
       if (msg.includes('already exists')) {
         // Branch exists from a prior session — check it out directly
-        await execAsync(`git worktree add "${worktreePath}" "${branchName}"`, { cwd: projectRoot })
+        try {
+          await execAsync(`git worktree add "${worktreePath}" "${branchName}"`, { cwd: projectRoot })
+        } catch (err2: unknown) {
+          const msg2 = (err2 as any).stderr as string ?? String(err2)
+          const existing = alreadyUsed(msg2)
+          if (existing) return { worktreePath: existing, branchName, baseBranch }
+          throw err2
+        }
       } else {
         throw err
       }
