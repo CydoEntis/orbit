@@ -24,9 +24,11 @@ export const IPC = {
   WINDOW_OPEN_SETTINGS: 'window:open-settings',
 
   WINDOW_REATTACH_TAB: 'window:reattach-tab',
+  WINDOW_DETACH_NOTE_PREVIEW: 'window:detach-note-preview',
 
   // Window: main → renderer (push)
   WINDOW_INITIAL_SESSIONS: 'window:initial-sessions',
+  WINDOW_INITIAL_NOTE_PREVIEW: 'window:initial-note-preview',
   WINDOW_TAB_REATTACHED: 'window:tab-reattached',
   WINDOW_MAXIMIZED_CHANGE: 'window:maximized-change',
 

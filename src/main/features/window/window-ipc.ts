@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { IPC } from '@shared/ipc-channels'
-import type { DetachTabPayload, WindowControlAction } from '@shared/ipc-types'
-import { detachTab, reattachTab, getWindow, focusWindow, openSettingsWindow } from '../../window-manager'
+import type { DetachTabPayload, DetachNotePreviewPayload, WindowControlAction } from '@shared/ipc-types'
+import { detachTab, detachNotePreview, reattachTab, getWindow, focusWindow, openSettingsWindow } from '../../window-manager'
 
 export function registerWindowIpc(): void {
   ipcMain.handle(IPC.WINDOW_GET_ID, (event) => {
@@ -13,6 +13,11 @@ export function registerWindowIpc(): void {
     const win = BrowserWindow.fromWebContents(event.sender)
     const fromWindowId = win ? String(win.id) : payload.fromWindowId
     const newWindowId = detachTab(payload.sessionId, fromWindowId)
+    return { newWindowId }
+  })
+
+  ipcMain.handle(IPC.WINDOW_DETACH_NOTE_PREVIEW, (_event, payload: DetachNotePreviewPayload) => {
+    const newWindowId = detachNotePreview(payload.noteId)
     return { newWindowId }
   })
 

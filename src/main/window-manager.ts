@@ -19,7 +19,7 @@ function getWindowId(win: BrowserWindow): string {
   return String(win.id)
 }
 
-export function createWindow(initialSessionIds: string[] = []): BrowserWindow {
+export function createWindow(initialSessionIds: string[] = [], initialNoteId?: string): BrowserWindow {
   Menu.setApplicationMenu(null)
   windowCounter++
 
@@ -63,9 +63,13 @@ export function createWindow(initialSessionIds: string[] = []): BrowserWindow {
 
     const payload: WindowInitialSessionsPayload = {
       sessionIds: initialSessionIds,
-      windowId
+      windowId,
+      isMainWindow: windowId === mainWindowId
     }
     win.webContents.send(IPC.WINDOW_INITIAL_SESSIONS, payload)
+    if (initialNoteId) {
+      win.webContents.send(IPC.WINDOW_INITIAL_NOTE_PREVIEW, { noteId: initialNoteId, windowId })
+    }
   })
 
   // Capture id before 'closed' fires — webContents is destroyed by then
@@ -168,6 +172,11 @@ export function openSettingsWindow(): void {
   } else {
     win.loadURL(`file://${join(__dirname, '../renderer/index.html')}#settings`)
   }
+}
+
+export function detachNotePreview(noteId: string): string {
+  const newWin = createWindow([], noteId)
+  return getWindowId(newWin)
 }
 
 export function reattachTab(sessionId: string, fromWindowId: string): boolean {
