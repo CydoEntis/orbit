@@ -1,6 +1,7 @@
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { TerminalPane } from './TerminalPane'
 import { NotesPane } from '../../layout/components/NotesPane'
+import { PaneDropTarget } from '../../layout/dnd/PaneDropTarget'
 import { useStore } from '../../../store/root.store'
 import { killSession } from '../../session/session.service'
 import { detachTab, reattachTab } from '../../window/window.service'
@@ -27,9 +28,11 @@ export function PaneTreeRenderer({ node, tabId, onContextMenu, forceMainWindow, 
   if (node.type === 'leaf') {
     if (node.panel === 'notes') {
       return (
-        <div className="flex flex-col w-full h-full bg-brand-surface">
-          <NotesPane tabId={tabId} />
-        </div>
+        <PaneDropTarget leafId={node.id} tabId={tabId}>
+          <div className="flex flex-col w-full h-full bg-brand-surface">
+            <NotesPane tabId={tabId} />
+          </div>
+        </PaneDropTarget>
       )
     }
 
@@ -82,13 +85,15 @@ export function PaneTreeRenderer({ node, tabId, onContextMenu, forceMainWindow, 
     const sessionColor = sessions[sid]?.color ?? '#22c55e'
 
     return (
-      <div
-        className="flex flex-col w-full h-full"
-        style={isFocused ? { boxShadow: `inset 0 0 0 1px ${sessionColor}60, inset 0 2px 0 0 ${sessionColor}` } : undefined}
-        onMouseDown={() => setFocusedSession(sid)}
-      >
-        <TerminalPane sessionId={sid} paneItems={paneItems} />
-      </div>
+      <PaneDropTarget leafId={node.id} tabId={tabId}>
+        <div
+          className="flex flex-col w-full h-full"
+          style={isFocused ? { boxShadow: `inset 0 0 0 1px ${sessionColor}60, inset 0 2px 0 0 ${sessionColor}` } : undefined}
+          onMouseDown={() => setFocusedSession(sid)}
+        >
+          <TerminalPane sessionId={sid} paneItems={paneItems} />
+        </div>
+      </PaneDropTarget>
     )
   }
 

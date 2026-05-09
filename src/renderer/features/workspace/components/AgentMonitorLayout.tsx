@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { PaneTreeRenderer } from '../../terminal/components/PaneTreeRenderer'
+import { LayoutDndProvider } from '../../layout/dnd/LayoutDndContext'
 import { useStore } from '../../../store/root.store'
 import { removeWorktree } from '../../fs/fs.service'
 
@@ -22,11 +23,13 @@ export function AgentMonitorLayout({ sessionId, onSessionClose }: Props): JSX.El
   if (!paneTree) return <div className="flex-1 min-h-0" />
 
   return (
-    <PaneTreeRenderer
-      node={paneTree}
-      tabId={sessionId}
-      forceMainWindow={true}
-      onCloseLastPane={handleCloseLastPane}
-    />
+    <LayoutDndProvider>
+      <PaneTreeRenderer
+        node={paneTree}
+        tabId={sessionId}
+        forceMainWindow={true}
+        onCloseLastPane={handleCloseLastPane}
+      />
+    </LayoutDndProvider>
   )
 }
