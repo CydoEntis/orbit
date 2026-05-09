@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { Plus, ChevronDown, ChevronRight, Loader2, FolderOpen, Pencil, X, Users, Trash2, Scissors, ExternalLink, Columns2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { useStore } from '../../../store/root.store'
+import { useLayoutDnd } from '../../layout/dnd/LayoutDndContext'
 import { useProjects } from '../../session/hooks/useProjects'
 import { patchSession, killSession, SESSION_COLORS } from '../../session/session.service'
 import { removeWorktree } from '../../fs/fs.service'
@@ -183,6 +184,7 @@ interface SessionRowProps {
 }
 
 function SessionRow({ meta, activeSessionId, worktreeStats, isNoWorkspace, dragging, onSelectSession, onEditMeta, onCtxMenu, onDragStart, onDragEnd, paneCount }: SessionRowProps): JSX.Element {
+  const { startDrag, endDrag } = useLayoutDnd()
   const isSelected = activeSessionId === meta.sessionId
   const isRunning = meta.status === 'running'
   const agentStatus = meta.agentStatus ?? 'idle'
@@ -193,9 +195,13 @@ function SessionRow({ meta, activeSessionId, worktreeStats, isNoWorkspace, dragg
 
   return (
     <button
-      draggable={isNoWorkspace}
-      onDragStart={isNoWorkspace ? (e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(meta.sessionId) } : undefined}
-      onDragEnd={isNoWorkspace ? onDragEnd : undefined}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        onDragStart(meta.sessionId)
+        startDrag({ type: 'sidebar-session', sessionId: meta.sessionId })
+      }}
+      onDragEnd={() => { onDragEnd(); endDrag() }}
       onClick={() => onSelectSession(meta.sessionId)}
       onDoubleClick={(e) => { e.stopPropagation(); onEditMeta(meta) }}
       onContextMenu={(e) => { e.preventDefault(); onCtxMenu({ x: e.clientX, y: e.clientY, meta }) }}

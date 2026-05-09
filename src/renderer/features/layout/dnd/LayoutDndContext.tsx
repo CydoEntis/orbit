@@ -2,11 +2,10 @@ import { createContext, useContext, useState, useCallback } from 'react'
 
 export type DropSide = 'top' | 'bottom' | 'left' | 'right'
 
-export interface DragState {
-  type: 'layout-leaf'
-  leafId: string
-  tabId: string
-}
+export type DragState =
+  | { type: 'layout-leaf'; leafId: string; tabId: string }
+  | { type: 'sidebar-session'; sessionId: string }
+  | { type: 'sidebar-notes' }
 
 export interface DropTarget {
   leafId: string

@@ -44,6 +44,7 @@ export interface SessionSlice {
   removeLayoutLeaf: (tabId: string, leafId: string) => void
   insertLayout: (tabId: string, targetLeafId: string, direction: 'horizontal' | 'vertical', newLeaf: LayoutLeaf, side: 'before' | 'after') => void
   moveLayout: (tabId: string, sourceLeafId: string, targetLeafId: string, direction: 'horizontal' | 'vertical', side: 'before' | 'after') => void
+  insertSessionIntoLayout: (targetTabId: string, targetLeafId: string, sessionId: string, direction: 'horizontal' | 'vertical', side: 'before' | 'after') => void
 }
 
 export const createSessionSlice: StateCreator<RootStore, [['zustand/immer', never]], [], SessionSlice> = (set) => ({
@@ -289,5 +290,30 @@ export const createSessionSlice: StateCreator<RootStore, [['zustand/immer', neve
       const tree = state.paneTree[tabId]
       if (!tree) return
       state.paneTree[tabId] = moveNode(tree, sourceLeafId, targetLeafId, direction, side)
+    }),
+
+  insertSessionIntoLayout: (targetTabId, targetLeafId, sessionId, direction, side) =>
+    set((state) => {
+      const newLeaf = makeTerminalLeaf(sessionId)
+      const sourceTabId = findTabForSession(state.paneTree, sessionId)
+      if (sourceTabId) {
+        const sourceTree = state.paneTree[sourceTabId]
+        if (sourceTree) {
+          const newSourceTree = removeTerminalLeaf(sourceTree, sessionId)
+          if (!newSourceTree) {
+            state.tabOrder = state.tabOrder.filter((id) => id !== sourceTabId)
+            delete state.paneTree[sourceTabId]
+            if (state.activeSessionId === sourceTabId) state.activeSessionId = targetTabId
+          } else {
+            state.paneTree[sourceTabId] = newSourceTree
+          }
+        }
+      }
+      const targetTree = state.paneTree[targetTabId]
+      if (targetTree) {
+        state.paneTree[targetTabId] = insertNode(targetTree, targetLeafId, direction, newLeaf, side)
+      }
+      state.activeSessionId = targetTabId
+      state.focusedSessionId = sessionId
     }),
 })

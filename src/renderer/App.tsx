@@ -21,6 +21,7 @@ import { useAutoUpdater } from './features/updater/hooks/useAutoUpdater'
 import { useGitReview } from './features/workspace/hooks/useGitReview'
 import { useStore } from './store/root.store'
 import { findNotesLeafId } from './features/layout/layout-tree'
+import { LayoutDndProvider } from './features/layout/dnd/LayoutDndContext'
 import { TERMINAL_THEME_LIST } from './features/terminal/hooks/useTerminal'
 import { cn } from './lib/utils'
 
@@ -262,6 +263,7 @@ export function App(): JSX.Element {
     <div className="flex flex-col h-screen bg-brand-bg text-zinc-100 overflow-hidden">
       <TitleBar title={titleBarTitle} subtitle={titleBarSubtitle} />
 
+      <LayoutDndProvider>
       <div className="flex flex-1 min-h-0">
         {/* Sidebar — always visible */}
         <div style={{ width: sidebarWidth, flexShrink: 0 }} className="flex flex-col h-full border-r border-brand-panel">
@@ -310,6 +312,7 @@ export function App(): JSX.Element {
           </div>
         </div>
       </div>
+      </LayoutDndProvider>
 
       {/* Status bar */}
       <div className="flex items-center justify-between h-10 px-3 bg-brand-surface border-t border-brand-panel flex-shrink-0">

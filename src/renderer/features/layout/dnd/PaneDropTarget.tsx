@@ -39,9 +39,10 @@ export function PaneDropTarget({ leafId, tabId, children }: Props): JSX.Element 
 
   const { dragState, activeDropTarget, startDrag, endDrag, setActiveDropTarget } = useLayoutDnd()
   const moveLayout = useStore((s) => s.moveLayout)
+  const insertSessionIntoLayout = useStore((s) => s.insertSessionIntoLayout)
 
   const isDragging = dragState !== null
-  const isSource = dragState?.leafId === leafId
+  const isSource = dragState?.type === 'layout-leaf' && dragState.leafId === leafId
   const activeZone = activeDropTarget?.leafId === leafId ? activeDropTarget.side : null
 
   const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -69,12 +70,16 @@ export function PaneDropTarget({ leafId, tabId, children }: Props): JSX.Element 
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
-    if (!dragState || !activeZone || dragState.tabId !== tabId) return
+    if (!dragState || !activeZone) return
     const direction = activeZone === 'left' || activeZone === 'right' ? 'horizontal' : 'vertical'
     const side = activeZone === 'right' || activeZone === 'bottom' ? 'after' : 'before'
-    moveLayout(tabId, dragState.leafId, leafId, direction, side)
+    if (dragState.type === 'layout-leaf') {
+      if (dragState.tabId === tabId) moveLayout(tabId, dragState.leafId, leafId, direction, side)
+    } else if (dragState.type === 'sidebar-session') {
+      insertSessionIntoLayout(tabId, leafId, dragState.sessionId, direction, side)
+    }
     endDrag()
-  }, [dragState, activeZone, tabId, leafId, moveLayout, endDrag])
+  }, [dragState, activeZone, tabId, leafId, moveLayout, insertSessionIntoLayout, endDrag])
 
   return (
     <div
