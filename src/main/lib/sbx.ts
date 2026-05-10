@@ -1,11 +1,8 @@
 import { spawnSync } from 'child_process'
 
 export function isSbxAvailable(): boolean {
-  try {
-    const cmd = process.platform === 'win32' ? 'where' : 'which'
-    const result = spawnSync(cmd, ['sbx'], { timeout: 3000, stdio: 'ignore' })
-    return result.status === 0
-  } catch {
-    return false
-  }
+  // spawnSync sets result.error = ENOENT when the binary doesn't exist.
+  // We don't care about the exit code — just whether sbx was found at all.
+  const result = spawnSync('sbx', [], { timeout: 3000, stdio: 'ignore' })
+  return result.error === undefined
 }
