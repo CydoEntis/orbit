@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, LayoutPanelLeft, SplitSquareHorizontal, Trash2, FileText, GitBranch, Keyboard } from 'lucide-react'
+import { X, LayoutPanelLeft, SplitSquareHorizontal, Trash2, FileText, GitBranch, Keyboard, GripHorizontal } from 'lucide-react'
 
 declare const __APP_VERSION__: string
 
@@ -46,6 +46,12 @@ const CHANGES: ChangeEntry[] = [
     title: 'Keybind changes — action required',
     description:
       'All shortcuts moved to Ctrl+Shift+* to avoid terminal conflicts. If your shortcuts feel broken, reset them in Settings → Hotkeys.',
+  },
+  {
+    icon: <GripHorizontal size={15} />,
+    title: 'Drag-and-drop layout',
+    description:
+      'Drag any pane to reorder the layout, or drag a session or note from the sidebar directly into a split. Drop zones appear on the edges of each pane.',
   },
   {
     icon: <Trash2 size={15} />,

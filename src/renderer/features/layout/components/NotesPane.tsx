@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Eye } from 'lucide-react'
 import { NoteDrawer } from '../../../components/NoteDrawer'
 import { useStore } from '../../../store/root.store'
 
@@ -69,12 +68,21 @@ export function NotesPane({ tabId, leafId, initialNoteId }: Props): JSX.Element 
   }, [removeLayoutLeaf, tabId, leafId])
 
   return (
-    <NoteDrawer
-      onClose={handleClose}
-      activeNoteId={activeNoteId}
-      onActivate={setActiveNoteId}
-      onCreate={createNote}
-      onOpenPreview={activeNoteId ? () => openMarkdownPreviewPane(activeNoteId) : undefined}
-    />
+    <div
+      className="h-full w-full"
+      onMouseDownCapture={() => {
+        if (activeNoteId) {
+          document.dispatchEvent(new CustomEvent('acc:note-active-changed', { detail: { noteId: activeNoteId, tabId } }))
+        }
+      }}
+    >
+      <NoteDrawer
+        onClose={handleClose}
+        activeNoteId={activeNoteId}
+        onActivate={setActiveNoteId}
+        onCreate={createNote}
+        onOpenPreview={activeNoteId ? () => openMarkdownPreviewPane(activeNoteId) : undefined}
+      />
+    </div>
   )
 }

@@ -163,6 +163,7 @@ export const createSessionSlice: StateCreator<RootStore, [['zustand/immer', neve
   setActiveSession: (sessionId) =>
     set((state) => {
       state.activeSessionId = sessionId
+      if (sessionId) state.focusedSessionId = sessionId
     }),
 
   reorderTabs: (newOrder) =>

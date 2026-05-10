@@ -50,13 +50,20 @@ export function PaneTreeRenderer({ node, tabId, onContextMenu, forceMainWindow, 
     if (node.panel === 'markdown-preview') {
       return (
         <PaneDropTarget leafId={node.id} tabId={tabId}>
-          <MarkdownPreviewPane
-            tabId={tabId}
-            leafId={node.id}
-            noteId={node.noteId}
-            isMainWindow={isMainWindow}
-            windowId={windowId}
-          />
+          <div
+            className="w-full h-full"
+            onMouseDownCapture={() => {
+              document.dispatchEvent(new CustomEvent('acc:note-active-changed', { detail: { noteId: node.noteId, tabId } }))
+            }}
+          >
+            <MarkdownPreviewPane
+              tabId={tabId}
+              leafId={node.id}
+              noteId={node.noteId}
+              isMainWindow={isMainWindow}
+              windowId={windowId}
+            />
+          </div>
         </PaneDropTarget>
       )
     }
@@ -111,7 +118,7 @@ export function PaneTreeRenderer({ node, tabId, onContextMenu, forceMainWindow, 
         <div
           className="flex flex-col w-full h-full"
           style={isFocused ? { boxShadow: `inset 0 0 0 2px ${sessionColor}, inset 0 3px 0 0 ${sessionColor}` } : undefined}
-          onMouseDown={() => {
+          onMouseDownCapture={() => {
             setFocusedSession(sid)
             document.dispatchEvent(new CustomEvent('acc:terminal-pane-focused'))
           }}
