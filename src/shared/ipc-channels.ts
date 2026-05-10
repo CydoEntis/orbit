@@ -90,7 +90,10 @@ export const IPC = {
   SHELL_OPEN_EXTERNAL: 'shell:open-external',
 
   // Clipboard: renderer → main (invoke)
-  CLIPBOARD_READ_TEXT: 'clipboard:read-text'
+  CLIPBOARD_READ_TEXT: 'clipboard:read-text',
+
+  // Sbx: renderer → main (invoke)
+  SBX_AVAILABLE: 'sbx:available'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

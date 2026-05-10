@@ -12,6 +12,7 @@ import {
 } from './session-registry'
 import { IPC } from '@shared/ipc-channels'
 import { getSettings } from '../settings/settings-store'
+import { isSbxAvailable } from '../../lib/sbx'
 import type {
   CreateSessionPayload,
   SessionMeta,
@@ -19,12 +20,15 @@ import type {
 } from '@shared/ipc-types'
 
 function resolveShellSpawn(agentCommand?: string, yoloMode?: boolean): { command: string; args: string[] } {
-  const defaultShell = getSettings().defaultShell
+  const settings = getSettings()
+  const defaultShell = settings.defaultShell
   let cmd = agentCommand
   if (cmd && yoloMode) {
-    // Append skip-permissions flag for supported agents
     if (cmd === 'claude' || cmd.startsWith('claude ')) {
       cmd = `${cmd} --dangerously-skip-permissions`
+    }
+    if (settings.sandboxYoloMode && isSbxAvailable()) {
+      cmd = `sbx run ${cmd}`
     }
   }
   if (process.platform === 'win32') {

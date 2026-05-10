@@ -190,7 +190,8 @@ export const AppSettingsSchema = z.object({
   noteFolderMap: z.record(z.string()).default({}),
   lastActiveProject: z.string().default(''),
   defaultSessionDir: z.string().default(''),
-  dismissedReleaseVersion: z.string().default('')
+  dismissedReleaseVersion: z.string().default(''),
+  sandboxYoloMode: z.boolean().default(true)
 })
 
 export const NoteSchema = z.object({ id: z.string(), content: z.string().default(''), updatedAt: z.number().default(0) })
