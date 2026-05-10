@@ -29,7 +29,7 @@ function resolveShellSpawn(agentCommand?: string, yoloMode?: boolean): { command
     }
     const sbxExe = getSbxExecutable()
     if (settings.sandboxYoloMode && sbxExe !== null) {
-      cmd = `"${sbxExe}" run ${cmd}`
+      cmd = `${sbxExe} run ${cmd}`
     }
   }
   if (process.platform === 'win32') {
