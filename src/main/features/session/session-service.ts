@@ -24,12 +24,16 @@ function resolveShellSpawn(agentCommand?: string, yoloMode?: boolean): { command
   const defaultShell = settings.defaultShell
   let cmd = agentCommand
   if (cmd && yoloMode) {
-    if (cmd === 'claude' || cmd.startsWith('claude ')) {
-      cmd = `${cmd} --dangerously-skip-permissions`
-    }
     const sbxExe = getSbxExecutable()
     if (settings.sandboxYoloMode && sbxExe !== null) {
-      cmd = `${sbxExe} run ${cmd}`
+      // Pass agent flags after -- so sbx doesn't consume them
+      if (cmd === 'claude' || cmd.startsWith('claude ')) {
+        cmd = `${sbxExe} run claude -- --dangerously-skip-permissions`
+      } else {
+        cmd = `${sbxExe} run ${cmd}`
+      }
+    } else if (cmd === 'claude' || cmd.startsWith('claude ')) {
+      cmd = `${cmd} --dangerously-skip-permissions`
     }
   }
   if (process.platform === 'win32') {
