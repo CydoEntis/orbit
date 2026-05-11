@@ -9,6 +9,8 @@ import { registerNotesIpc } from './features/notes/notes-ipc'
 import { initUpdater } from './features/updater/updater'
 
 app.setName('Orbit')
+// Ubuntu 22.04+ restricts unprivileged user namespaces, breaking Electron's sandbox
+if (process.platform === 'linux') app.commandLine.appendSwitch('no-sandbox')
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
