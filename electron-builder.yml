@@ -41,7 +41,8 @@ linux:
   maintainer: CydoEntis <cydoentis@gmail.com>
   executableName: orbit
   desktop:
-    StartupWMClass: Orbit
+    entry:
+      StartupWMClass: Orbit
   target:
     - target: AppImage
       arch: [x64]
