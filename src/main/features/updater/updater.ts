@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { IPC } from '@shared/ipc-channels'
+import { killAllPtys } from '../session/session-registry'
 
 function broadcast(channel: string, payload?: unknown): void {
   const { BrowserWindow } = require('electron')
@@ -15,6 +16,7 @@ let pendingUpdate: { version: string } | null = null
 export function initUpdater(): void {
   ipcMain.handle(IPC.UPDATE_GET_PENDING, () => pendingUpdate)
   ipcMain.handle(IPC.UPDATE_INSTALL, () => {
+    killAllPtys()
     autoUpdater.quitAndInstall(true, true)
   })
 

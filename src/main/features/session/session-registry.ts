@@ -36,3 +36,9 @@ export function unsubscribeWebContents(webContentsId: number): void {
     entry.pty.unsubscribe(webContentsId)
   }
 }
+
+export function killAllPtys(): void {
+  for (const entry of registry.values()) {
+    try { entry.pty.kill() } catch { /* ignore already-dead ptys */ }
+  }
+}

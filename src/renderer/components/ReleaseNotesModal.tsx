@@ -19,6 +19,12 @@ interface ChangeEntry {
 const CHANGES: ChangeEntry[] = [
   {
     icon: <RefreshCw size={15} />,
+    title: 'Linux update and icon fixes',
+    description:
+      'Fixed "not responding" hang when installing updates on Linux by cleanly shutting down terminal sessions first. Fixed taskbar icon not showing the Orbit logo on Linux.',
+  },
+  {
+    icon: <RefreshCw size={15} />,
     title: 'Reliable auto-update and restart',
     description:
       'The updater now restarts the app correctly after installing. Updates that finish downloading before the app fully loads are no longer silently lost.',
